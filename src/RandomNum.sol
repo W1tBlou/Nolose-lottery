@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.19;
+pragma solidity ^0.8.19;
 
-import {VRFConsumerBaseV2Plus} from "@chainlink/contracts@1.3.0/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
-import {VRFV2PlusClient} from "@chainlink/contracts@1.3.0/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+import {VRFConsumerBaseV2Plus, IVRFCoordinatorV2Plus} from "chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 
 /**
  * @notice A Chainlink VRF consumer which uses randomness to mimic the rolling
@@ -20,7 +20,7 @@ import {VRFV2PlusClient} from "@chainlink/contracts@1.3.0/src/v0.8/vrf/dev/libra
  * DO NOT USE THIS CODE IN PRODUCTION.
  */
 
-contract VRFD20 is VRFConsumerBaseV2Plus {
+contract RandomNum is VRFConsumerBaseV2Plus {
     uint256 private constant ROLL_IN_PROGRESS = 42;
 
     // Your subscription ID.
@@ -28,7 +28,7 @@ contract VRFD20 is VRFConsumerBaseV2Plus {
 
     // Sepolia coordinator. For other networks,
     // see https://docs.chain.link/vrf/v2-5/supported-networks#configurations
-    address public vrfCoordinator = 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B;
+    address public vrfCoordinator;
 
     // The gas lane to use, which specifies the maximum gas price to bump to.
     // For a list of available gas lanes on each network,
@@ -54,7 +54,7 @@ contract VRFD20 is VRFConsumerBaseV2Plus {
     // map rollers to requestIds
     mapping(uint256 => address) private s_rollers;
     // map vrf results to rollers
-    mapping(address => uint256) private s_results;
+    mapping(address => uint256) public s_results;
 
     event DiceRolled(uint256 indexed requestId, address indexed roller);
     event DiceLanded(uint256 indexed requestId, uint256 indexed result);
@@ -65,9 +65,15 @@ contract VRFD20 is VRFConsumerBaseV2Plus {
      * @dev NETWORK: Sepolia
      *
      * @param subscriptionId subscription ID that this consumer contract can use
+     * @param _vrfCoordinator VRF coordinator address
      */
-    constructor(uint256 subscriptionId) VRFConsumerBaseV2Plus(vrfCoordinator) {
+    constructor(
+        uint256 subscriptionId,
+        address _vrfCoordinator
+    ) VRFConsumerBaseV2Plus(_vrfCoordinator) {
         s_subscriptionId = subscriptionId;
+        vrfCoordinator = _vrfCoordinator;
+        s_vrfCoordinator = IVRFCoordinatorV2Plus(_vrfCoordinator);
     }
 
     /**
