@@ -22,7 +22,7 @@ import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VR
 
 contract RandomNum is VRFConsumerBaseV2Plus {
     uint256 private constant ROLL_IN_PROGRESS = 42;
-
+    uint256 private constant MY_SUM_STAKE = 20;
     // Your subscription ID.
     uint256 public s_subscriptionId;
 
@@ -77,6 +77,14 @@ contract RandomNum is VRFConsumerBaseV2Plus {
     }
 
     /**
+     * @notice Update the subscription ID
+     * @param newSubscriptionId The new subscription ID to use
+     */
+    function updateSubscriptionId(uint256 newSubscriptionId) public onlyOwner {
+        s_subscriptionId = newSubscriptionId;
+    }
+
+    /**
      * @notice Requests randomness
      * @dev Warning: if the VRF response is delayed, avoid calling requestRandomness repeatedly
      * as that would give miners/VRF operators latitude about which VRF response arrives first.
@@ -125,50 +133,9 @@ contract RandomNum is VRFConsumerBaseV2Plus {
         uint256 requestId,
         uint256[] calldata randomWords
     ) internal override {
-        uint256 d20Value = (randomWords[0] % 20) + 1;
+        uint256 d20Value = (randomWords[0] % MY_SUM_STAKE) + 1;
         s_results[s_rollers[requestId]] = d20Value;
         emit DiceLanded(requestId, d20Value);
     }
 
-    /**
-     * @notice Get the house assigned to the player once the address has rolled
-     * @param player address
-     * @return house as a string
-     */
-    function house(address player) public view returns (string memory) {
-        require(s_results[player] != 0, "Dice not rolled");
-        require(s_results[player] != ROLL_IN_PROGRESS, "Roll in progress");
-        return _getHouseName(s_results[player]);
-    }
-
-    /**
-     * @notice Get the house name from the id
-     * @param id uint256
-     * @return house name string
-     */
-    function _getHouseName(uint256 id) private pure returns (string memory) {
-        string[20] memory houseNames = [
-            "Targaryen",
-            "Lannister",
-            "Stark",
-            "Tyrell",
-            "Baratheon",
-            "Martell",
-            "Tully",
-            "Bolton",
-            "Greyjoy",
-            "Arryn",
-            "Frey",
-            "Mormont",
-            "Tarley",
-            "Dayne",
-            "Umber",
-            "Valeryon",
-            "Manderly",
-            "Clegane",
-            "Glover",
-            "Karstark"
-        ];
-        return houseNames[id - 1];
-    }
 }

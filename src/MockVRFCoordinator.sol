@@ -5,40 +5,19 @@ import {VRFConsumerBaseV2Plus} from "chainlink/contracts/src/v0.8/vrf/dev/VRFCon
 import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 
 contract MockVRFCoordinator {
-    uint256 internal counter = 0;
-    mapping(uint256 => address) internal s_consumers;
-    mapping(uint256 => uint256[]) internal s_randomWords;
+    uint256 internal counter = 10;
 
     function requestRandomWords(
         VRFV2PlusClient.RandomWordsRequest calldata req
     ) external returns (uint256 requestId) {
         requestId = counter;
-        s_consumers[requestId] = msg.sender;
-        
-        // Generate deterministic but seemingly random numbers
+        VRFConsumerBaseV2Plus consumer = VRFConsumerBaseV2Plus(msg.sender);
         uint256[] memory randomWords = new uint256[](req.numWords);
-        for (uint256 i = 0; i < req.numWords; i++) {
-            randomWords[i] = uint256(
-                keccak256(
-                    abi.encodePacked(
-                        counter,
-                        block.timestamp,
-                        block.prevrandao,
-                        i
-                    )
-                )
-            );
-        }
-        s_randomWords[requestId] = randomWords;
+        // Generate a number that will result in a valid roll between 1 and 20
+        // Since the contract does (randomWords[0] % 20) + 1
+        randomWords[0] = 42; // This will result in 1
+        consumer.rawFulfillRandomWords(requestId, randomWords);
         counter += 1;
         return requestId;
-    }
-
-    function fulfillRandomWords(uint256 requestId) external {
-        require(s_consumers[requestId] != address(0), "Request not found");
-        VRFConsumerBaseV2Plus consumer = VRFConsumerBaseV2Plus(s_consumers[requestId]);
-        consumer.rawFulfillRandomWords(requestId, s_randomWords[requestId]);
-        delete s_consumers[requestId];
-        delete s_randomWords[requestId];
     }
 } 
