@@ -1,0 +1,5 @@
+@openzeppelin/=lib/openzeppelin-contracts/
+@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts
+
+@chainlink/=lib/chainlink/
+@aave/core-v3/=lib/aave-v3-core/
