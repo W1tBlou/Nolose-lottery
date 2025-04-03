@@ -9,12 +9,14 @@ import {
     IVRFCoordinatorV2Plus
 } from "chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+import {AutomationCompatibleInterface} from
+    "chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
 
 /**
  * @title LotterySystem
  * @dev Contract for managing lotteries using USDC tokens
  */
-contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
+contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
     // USDC token contract
     IERC20 public USDC;
     IPool public aavePool;
@@ -24,9 +26,6 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
 
     // Custom ownership implementation
     address private _lotteryOwner;
-
-    // Events
-    event LotteryOwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     // Lottery structure
     struct Lottery {
@@ -70,6 +69,8 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
     event WinnerSelected(uint256 indexed lotteryId, address winner, uint256 yield);
     event DiceRolled(uint256 indexed requestId, address indexed roller);
     event DiceLanded(uint256 indexed requestId, uint256 indexed result);
+    event DelayedFunctionExecuted(address indexed caller, uint256 timestamp, uint256 lotteryId);
+    event LotteryOwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     constructor(address _USDC, address _pool) VRFConsumerBaseV2Plus(vrfCoordinator) {
         USDC = IERC20(_USDC);
@@ -153,7 +154,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
         emit StakeCast(lotteryId, msg.sender, amount);
     }
 
-    function finalizeStaking(uint256 lotteryId) external nonReentrant {
+    function finalizeStaking(uint256 lotteryId) internal {
         Lottery storage lottery = lotteries[lotteryId];
         uint256 amount = totalStakes[lotteryId];
 
@@ -185,7 +186,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
         require(USDC.transfer(staker, userStake), "USDC transfer failed");
     }
 
-    function finalizeLottery(uint256 lotteryId) external {
+    function finalizeLottery(uint256 lotteryId) internal {
         Lottery storage lottery = lotteries[lotteryId];
 
         require(lottery.id != 0, "Lottery does not exist");
@@ -225,12 +226,12 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
         require(winner != address(0), "No winner selected");
         lottery.winner = winner;
 
-        // Withdraw from Aave after winner selection
-        try aavePool.withdraw(address(USDC), type(uint256).max, address(this)) {
-            // Successfully withdrawn from Aave
-        } catch {
-            revert("Failed to withdraw from Aave pool");
-        }
+        // // Withdraw from Aave after winner selection
+        // try aavePool.withdraw(address(USDC), type(uint256).max, address(this)) {
+        //     // Successfully withdrawn from Aave
+        // } catch {
+        //     revert("Failed to withdraw from Aave pool");
+        // }
 
         // Get the actual amount withdrawn
         uint256 amountWithYield = USDC.balanceOf(address(this));
@@ -320,5 +321,49 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
         lotteries[lotteryId].randomNumber = randomValue;
 
         emit DiceLanded(requestId, randomValue);
+    }
+
+    function checkUpkeep(bytes calldata /* checkData */ )
+        external
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory /* performData */ )
+    {
+        for (uint256 i = 1; i < _lotteryIdCounter; i++) {
+            if (
+                lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].deadline
+                    && lotteries[i].randomNumber != 0
+            ) {
+                upkeepNeeded = true;
+                break;
+            } else if (
+                lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].stakingDeadline
+            ) {
+                upkeepNeeded = true;
+                break;
+            } else {
+                upkeepNeeded = false;
+            }
+        }
+    }
+
+    function performUpkeep(bytes calldata /* performData */ ) external override {
+        // require(block.timestamp >= lastFunctionExecutionTime + delay, "Delay period not met");
+        for (uint256 i = 1; i < _lotteryIdCounter; i++) {
+            if (
+                lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].deadline
+                    && lotteries[i].randomNumber != 0
+            ) {
+                emit DelayedFunctionExecuted(msg.sender, block.timestamp, i);
+                finalizeLottery(i);
+                break;
+            } else if (
+                lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].stakingDeadline
+            ) {
+                emit DelayedFunctionExecuted(msg.sender, block.timestamp, i);
+                finalizeStaking(i);
+                break;
+            }
+        }
     }
 }

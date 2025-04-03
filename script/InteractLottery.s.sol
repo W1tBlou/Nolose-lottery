@@ -13,7 +13,7 @@ contract InteractLottery is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // Get the deployed contract address
-        address lotteryAddress = 0x0f445E2E6A47b35914Cb54328d56e7fC785E0a99;
+        address lotteryAddress = 0x4D65Bf06b4F49Ce8a14aBF09c7D2ECe9fd6E220D;
         LotterySystem lottery = LotterySystem(lotteryAddress);
 
         // Get USDC address from env

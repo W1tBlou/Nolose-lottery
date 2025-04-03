@@ -10,10 +10,10 @@ if [ -z "$PRIVATE_KEY" ]; then
 fi
 
 # Add 0x prefix to PRIVATE_KEY if it doesn't have it
-if [[ ! "$PRIVATE_KEY" =~ ^0x ]]; then
-  PRIVATE_KEY="0x$PRIVATE_KEY"
-  echo "Added 0x prefix to PRIVATE_KEY"
-fi
+# if [[ ! "$PRIVATE_KEY" =~ ^0x ]]; then
+#   PRIVATE_KEY="0x$PRIVATE_KEY"
+#   echo "Added 0x prefix to PRIVATE_KEY"
+# fi
 
 # Export the modified PRIVATE_KEY
 export PRIVATE_KEY
@@ -33,7 +33,7 @@ deploy_anvil() {
 # Function to deploy to Sepolia
 deploy_sepolia() {
     echo "Deploying to Sepolia..."
-    forge script script/DeployRandomNum.s.sol:DeployRandomNum --rpc-url $SEPOLIA_RPC_URL --broadcast
+    # forge script script/ --rpc-url $SEPOLIA_RPC_URL --broadcast
 }
 
 # Check command line argument
