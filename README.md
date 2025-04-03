@@ -1,3 +1,6 @@
+# Scheme
+![NoLose Lottery System Scheme](./scheme.jpg)
+
 # NoLose Lottery System
 
 A decentralized lottery system built on Ethereum that allows users to participate in lotteries using USDC tokens. The system integrates with Aave Protocol to generate yield from staked tokens, which is then distributed to the winner.
