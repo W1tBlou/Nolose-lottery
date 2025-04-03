@@ -8,7 +8,9 @@ contract DeployLottery is Script {
     function setUp() public {}
 
     function run() public {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        // Use vm.envString instead of vm.envUint for the private key
+        string memory privateKeyString = vm.envString("PRIVATE_KEY");
+        uint256 deployerPrivateKey = vm.parseUint(privateKeyString);
         vm.startBroadcast(deployerPrivateKey);
 
         // Get contract addresses from environment

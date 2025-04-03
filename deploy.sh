@@ -3,8 +3,26 @@
 # Load environment variables
 source .env
 
-# Deploy the contract to Sepolia
-forge script script/DeployRandomNum.s.sol:DeployRandomNum --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
+# Check if PRIVATE_KEY is set
+if [ -z "$PRIVATE_KEY" ]; then
+  echo "Error: PRIVATE_KEY is not set in .env file"
+  exit 1
+fi
+
+# Add 0x prefix to PRIVATE_KEY if it doesn't have it
+if [[ ! "$PRIVATE_KEY" =~ ^0x ]]; then
+  PRIVATE_KEY="0x$PRIVATE_KEY"
+  echo "Added 0x prefix to PRIVATE_KEY"
+fi
+
+# Export the modified PRIVATE_KEY
+export PRIVATE_KEY
+
+# Deploy to Sepolia
+echo "Deploying to Sepolia..."
+forge script script/DeployLottery.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
+
+echo "Deployment complete!"
 
 # Function to deploy to Anvil
 deploy_anvil() {
