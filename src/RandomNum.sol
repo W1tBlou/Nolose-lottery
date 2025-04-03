@@ -94,7 +94,7 @@ contract RandomNum is VRFConsumerBaseV2Plus {
      */
     function rollDice(
         address roller
-    ) public onlyOwner returns (uint256 requestId) {
+    ) public  onlyOwner returns (uint256 requestId) {
         require(s_results[roller] == 0, "Already rolled");
         // Will revert if subscription is not set and funded.
         requestId = s_vrfCoordinator.requestRandomWords(
