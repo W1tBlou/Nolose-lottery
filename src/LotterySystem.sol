@@ -2,19 +2,28 @@
 pragma solidity ^0.8.20;
 
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {VRFConsumerBaseV2Plus, IVRFCoordinatorV2Plus} from "chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 
 /**
  * @title LotterySystem
  * @dev Contract for managing lotteries using USDC tokens
  */
-contract LotterySystem is Ownable, ReentrancyGuard {
+contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
     // VegaVote token contract
     IERC20 public USDC;
     IPool public aavePool;
 
+    // Fixed VRF coordinator address
+    address public constant vrfCoordinator = 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B;
+
+    // Custom ownership implementation
+    address private _lotteryOwner;
+
+    // Events
+    event LotteryOwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     // Lottery structure
     struct Lottery {
@@ -24,11 +33,16 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         bool finalized;
         bool stakingFinalized;
         address winner;
+        uint256 randomRequestId;
+        uint256 randomNumber;
         address initiator;
     }
 
     // Mapping from vote ID to Vote
     mapping(uint256 => Lottery) public lotteries;
+
+    // Mapping from random request ID to lottery ID
+    mapping(uint256 => Lottery) public randomRequestIds;
     
     // Mapping from lottery ID to voter address to stake index
     mapping(uint256 => mapping(address => uint256)) public stakes;
@@ -36,7 +50,15 @@ contract LotterySystem is Ownable, ReentrancyGuard {
     mapping(uint256 => uint256) public totalStakes;
 
     // Counter for vote IDs
-    uint256 private _lotteryIdCounter = 1;
+    uint256 private _lotteryIdCounter = 1;    
+    
+    // chainlink vrf variables
+    uint256 public s_subscriptionId = 26855092016204205124453749677461341788139777924168207765380961489454212986163;
+    bytes32 public s_keyHash =
+        0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae;
+    uint32 public callbackGasLimit = 40000;
+    uint16 public requestConfirmations = 3;
+    uint32 public numWords = 1;
 
     // Events
     event LotteryCreated(
@@ -46,13 +68,43 @@ contract LotterySystem is Ownable, ReentrancyGuard {
     event LotteryFinalized(uint256 indexed lotteryId, address winner, uint256 yield);
     event LotteryStakingFinalized(uint256 indexed lotteryId, uint256 amount);
     event WinnerSelected(uint256 indexed lotteryId, address winner, uint256 yield);
+    event DiceRolled(uint256 indexed requestId, address indexed roller);
+    event DiceLanded(uint256 indexed requestId, uint256 indexed result);
 
-    constructor(address _USDC, address _pool) Ownable(msg.sender) {
+    constructor(address _USDC, address _pool) VRFConsumerBaseV2Plus(vrfCoordinator) {
         USDC = IERC20(_USDC);
         aavePool = IPool(_pool);
+        s_vrfCoordinator = IVRFCoordinatorV2Plus(vrfCoordinator);
+        _lotteryOwner = msg.sender;
     }
 
-    function createLottery(uint256 durationInSeconds, uint256 stakingDurationInSeconds) external onlyOwner {
+    /**
+     * @dev Throws if called by any account other than the lottery owner.
+     */
+    modifier onlyLotteryOwner() {
+        require(msg.sender == _lotteryOwner, "Caller is not the lottery owner");
+        _;
+    }
+
+    /**
+     * @dev Returns the address of the current lottery owner.
+     */
+    function lotteryOwner() public view returns (address) {
+        return _lotteryOwner;
+    }
+
+    /**
+     * @dev Transfers lottery ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     */
+    function transferLotteryOwnership(address newOwner) public onlyLotteryOwner {
+        require(newOwner != address(0), "New owner is the zero address");
+        address oldOwner = _lotteryOwner;
+        _lotteryOwner = newOwner;
+        emit LotteryOwnershipTransferred(oldOwner, newOwner);
+    }
+
+    function createLottery(uint256 durationInSeconds, uint256 stakingDurationInSeconds) external onlyLotteryOwner {
         require(durationInSeconds > 0, "Duration must be greater than 0");
         require(stakingDurationInSeconds > 0, "Staking duration must be greater than 0");
 
@@ -65,6 +117,8 @@ contract LotterySystem is Ownable, ReentrancyGuard {
             finalized: false,
             stakingFinalized: false,
             winner: address(0),
+            randomRequestId: 0,
+            randomNumber: 0,
             initiator: msg.sender
         });
 
@@ -114,8 +168,12 @@ contract LotterySystem is Ownable, ReentrancyGuard {
             // If Aave supply fails, revert the transaction
             revert("Failed to supply USDC to Aave pool");
         }
-
         emit LotteryStakingFinalized(lotteryId, amount);
+
+        // Call rollDice function to get random number for winner selection
+        uint256 requestId = rollDice(address(this));
+        lotteries[lotteryId].randomRequestId = requestId;
+        randomRequestIds[requestId] = lotteries[lotteryId];
     }
 
     function _stakeBackTransfer(address staker, uint256 userStake) internal nonReentrant {
@@ -129,6 +187,7 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         require(!lottery.finalized, "Lottery already finalized");
         require(lottery.stakingFinalized, "Staking not finalized");
         require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
+        require(lottery.randomNumber != 0, "Random number not set");
         
         uint256 originalStake = totalStakes[lotteryId];
         
@@ -136,12 +195,8 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         address[] memory stakersList = stakers[lotteryId];
         require(stakersList.length > 0, "No stakers in lottery");
         
-        // Select random winner
-        uint256 randomValue = uint256(keccak256(abi.encodePacked(
-            blockhash(block.number - 1),
-            block.timestamp,
-            msg.sender
-        )));
+        // Select random winner from VRF
+        uint256 randomValue = lottery.randomNumber;
         
         // Scale down to range [0, totalStakes[lotteryId]]
         uint256 scaledRandom = randomValue % totalStakes[lotteryId];
@@ -210,5 +265,59 @@ contract LotterySystem is Ownable, ReentrancyGuard {
      */
     function getLotteryCount() external view returns (uint256) {
         return _lotteryIdCounter - 1;
+    }
+
+      /**
+     * @notice Requests randomness
+     * @dev Warning: if the VRF response is delayed, avoid calling requestRandomness repeatedly
+     * as that would give miners/VRF operators latitude about which VRF response arrives first.
+     * @dev You must review your implementation details with extreme care.
+     *
+     * @param roller address of the roller
+     */
+    function rollDice(
+        address roller
+    ) public  onlyLotteryOwner returns (uint256 requestId) {
+        // require(s_results[roller] == 0, "Already rolled");
+        // Will revert if subscription is not set and funded.
+        requestId = s_vrfCoordinator.requestRandomWords(
+            VRFV2PlusClient.RandomWordsRequest({
+                keyHash: s_keyHash,
+                subId: s_subscriptionId,
+                requestConfirmations: requestConfirmations,
+                callbackGasLimit: callbackGasLimit,
+                numWords: numWords,
+                extraArgs: VRFV2PlusClient._argsToBytes(
+                    // Set nativePayment to true to pay for VRF requests with Sepolia ETH instead of LINK
+                    VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
+                )
+            })
+        );
+        emit DiceRolled(requestId, roller);
+    }
+
+    /**
+     * @notice Callback function used by VRF Coordinator to return the random number to this contract.
+     *
+     * @dev Some action on the contract state should be taken here, like storing the result.
+     * @dev WARNING: take care to avoid having multiple VRF requests in flight if their order of arrival would result
+     * in contract states with different outcomes. Otherwise miners or the VRF operator would could take advantage
+     * by controlling the order.
+     * @dev The VRF Coordinator will only send this function verified responses, and the parent VRFConsumerBaseV2
+     * contract ensures that this method only receives randomness from the designated VRFCoordinator.
+     *
+     * @param requestId uint256
+     * @param randomWords  uint256[] The random result returned by the oracle.
+     */
+    function fulfillRandomWords(
+        uint256 requestId,
+        uint256[] calldata randomWords
+    ) internal override {
+        // Get random value from VRF
+        uint256 randomValue = randomWords[0];
+        // Store random value in lottery
+        randomRequestIds[requestId].randomNumber = randomValue;
+
+        emit DiceLanded(requestId, randomValue);
     }
 }

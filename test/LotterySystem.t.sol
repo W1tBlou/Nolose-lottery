@@ -19,6 +19,7 @@ contract LotterySystemTest is Test {
     address public user1 = 0x4260193D14D89836E7e83E2238A091D5a737ffcA;
     address public user2 = 0xC066ac5D385419B1A8c43A0E146fA439837a8B8c;
     address public user3 = 0x46B2Ee09028B2512f10bAeA18A743Ca46A56F658;
+    address public constant VRF_COORDINATOR = 0x2eD832Ba664535e5886b75D64C46EB9a228C2610; // Mainnet VRF Coordinator
 
     uint256 public constant INITIAL_BALANCE = 1000 * 10**6; // 1000 USDC (6 decimals)
     uint256 public constant STAKE_AMOUNT = 100 * 10**6; // 100 USDC
@@ -116,7 +117,7 @@ contract LotterySystemTest is Test {
         lotterySystem.finalizeStaking(1);
 
         // Verify staking is finalized
-        (,,,,bool stakingFinalized,,) = lotterySystem.lotteries(1);
+        (,,,,bool stakingFinalized,,,,) = lotterySystem.lotteries(1);
         assertTrue(stakingFinalized);
     }
 
@@ -160,7 +161,7 @@ contract LotterySystemTest is Test {
         lotterySystem.finalizeLottery(1);
 
         // Verify lottery is finalized
-        (uint256 id, uint256 deadline, uint256 stakingDeadline, bool finalized, bool stakingFinalized, address winner, address initiator) = lotterySystem.lotteries(1);
+        (uint256 id, uint256 deadline, uint256 stakingDeadline, bool finalized, bool stakingFinalized, address winner, uint256 randomRequestId, uint256 randomNumber, address initiator) = lotterySystem.lotteries(1);
         assertTrue(finalized);
 
         // Get winner
