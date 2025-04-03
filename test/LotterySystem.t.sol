@@ -26,8 +26,16 @@ contract LotterySystemTest is Test {
     uint256 public constant STAKING_DURATION = 1 hours;
 
     function setUp() public {
+        // Try to get RPC URL from environment, fallback to a default if not available
+        string memory rpcUrl;
+        try vm.envString("ETH_RPC_URL") returns (string memory url) {
+            rpcUrl = url;
+        } catch {
+            rpcUrl = "https://eth-mainnet.g.alchemy.com/v2/demo";
+        }
+
         // Fork mainnet to get real USDC and Aave contracts
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"));
+        vm.createSelectFork(rpcUrl);
 
         // Get mainnet addresses
         usdc = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC on mainnet
