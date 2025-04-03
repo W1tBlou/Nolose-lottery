@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./LotteryResultNFT.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -16,8 +15,6 @@ contract LotterySystem is Ownable, ReentrancyGuard {
     IERC20 public USDC;
     IPool public aavePool;
 
-    // LotteryResultNFT contract
-    LotteryResultNFT public lotteryResultNFT;
 
     // Lottery structure
     struct Lottery {
@@ -46,15 +43,13 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         uint256 indexed lotteryId, uint256 deadline, uint256 stakingDeadline, address initiator
     );
     event StakeCast(uint256 indexed lotteryId, address indexed staker, uint256 amount);
-    event LotteryFinalized(uint256 indexed lotteryId, address winner);
+    event LotteryFinalized(uint256 indexed lotteryId, address winner, uint256 yield);
     event LotteryStakingFinalized(uint256 indexed lotteryId, uint256 amount);
     event WinnerSelected(uint256 indexed lotteryId, address winner, uint256 yield);
-    event NFTMinted(uint256 indexed lotteryId, uint256 indexed tokenId, address recipient);
 
-    constructor(address _USDC, address _pool, address _lotteryResultNFT) Ownable(msg.sender) {
+    constructor(address _USDC, address _pool) Ownable(msg.sender) {
         USDC = IERC20(_USDC);
         aavePool = IPool(_pool);
-        lotteryResultNFT = LotteryResultNFT(_lotteryResultNFT);
     }
 
     function createLottery(uint256 durationInSeconds, uint256 stakingDurationInSeconds) external onlyOwner {
@@ -123,28 +118,23 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         emit LotteryStakingFinalized(lotteryId, amount);
     }
 
-    function finalizeLottery(uint256 lotteryId) external nonReentrant {
+    function _stakeBackTransfer(address staker, uint256 userStake) internal nonReentrant {
+        require(USDC.transfer(staker, userStake), "USDC transfer failed");
+    }
+
+    function finalizeLottery(uint256 lotteryId) external {
         Lottery storage lottery = lotteries[lotteryId];
 
         require(lottery.id != 0, "Lottery does not exist");
         require(!lottery.finalized, "Lottery already finalized");
-        require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
-
         require(lottery.stakingFinalized, "Staking not finalized");
+        require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
         
-        // Withdraw all USDC + yield from Aave
-        uint256 amountWithYield = USDC.balanceOf(address(aavePool));
-        try aavePool.withdraw(address(USDC), amountWithYield, address(this)) {
-            // Successfully withdrawn from Aave
-        } catch {
-            revert("Failed to withdraw from Aave pool");
-        }
-
         uint256 originalStake = totalStakes[lotteryId];
-        uint256 yield = amountWithYield - originalStake;
-
-        // Iterate through stakes to find winner based on weighted random selection
+        
+        // First, select the winner before any external calls
         address[] memory stakersList = stakers[lotteryId];
+        require(stakersList.length > 0, "No stakers in lottery");
         
         // Select random winner
         uint256 randomValue = uint256(keccak256(abi.encodePacked(
@@ -153,8 +143,8 @@ contract LotterySystem is Ownable, ReentrancyGuard {
             msg.sender
         )));
         
-        // Scale down to range [0,1] by dividing by max uint256
-        uint256 scaledRandom = randomValue / type(uint256).max;
+        // Scale down to range [0, totalStakes[lotteryId]]
+        uint256 scaledRandom = randomValue % totalStakes[lotteryId];
         
         uint256 cumulativeStake = 0;
         address winner;
@@ -162,46 +152,51 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         // Iterate through stakes to find winner based on weighted random selection
         for (uint256 i = 0; i < stakersList.length; i++) {
             address staker = stakersList[i];
-            cumulativeStake += stakes[lotteryId][staker] / totalStakes[lotteryId];
+            uint256 stakeAmount = stakes[lotteryId][staker];
+            require(stakeAmount > 0, "Invalid stake amount");
+            
+            cumulativeStake += stakeAmount;
             if (cumulativeStake > scaledRandom && winner == address(0)) {
                 winner = staker;
                 break;
             }
         }
         
+        require(winner != address(0), "No winner selected");
         lottery.winner = winner;
+
+        // Withdraw from Aave after winner selection
+        try aavePool.withdraw(address(USDC), type(uint256).max, address(this)) {
+            // Successfully withdrawn from Aave
+        } catch {
+            revert("Failed to withdraw from Aave pool");
+        }
+
+        // Get the actual amount withdrawn
+        uint256 amountWithYield = USDC.balanceOf(address(this));
+        require(amountWithYield >= originalStake, "Yield cannot be negative");
+        uint256 yield = amountWithYield - originalStake;
+
+        // Store stakes in memory to prevent reentrancy
+        uint256[] memory userStakes = new uint256[](stakersList.length);
+        for (uint256 i = 0; i < stakersList.length; i++) {
+            userStakes[i] = stakes[lotteryId][stakersList[i]];
+        }
 
         // Return original stakes to all participants
         for (uint256 i = 0; i < stakersList.length; i++) {
-            address staker = stakersList[i];
-            uint256 userStake = stakes[lotteryId][staker];
-            if (userStake > 0) {
-                require(USDC.transfer(staker, userStake), "USDC transfer failed");
+            if (userStakes[i] > 0) {
+                _stakeBackTransfer(stakersList[i], userStakes[i]);
             }
         }
 
         // Send yield to winner
-        require(USDC.transfer(winner, yield), "Failed to transfer yield to winner");
+        _stakeBackTransfer(winner, yield);
 
         emit WinnerSelected(lotteryId, winner, yield);
 
-        _finalizeLottery(lotteryId, winner, yield);
-    }
-
-    
-    function _finalizeLottery(uint256 lotteryId, address winner, uint256 yield) internal nonReentrant {
-        Lottery storage lottery = lotteries[lotteryId];
-
         lottery.finalized = true;
-
-        emit LotteryFinalized(lotteryId, lottery.initiator);
-
-        // Mint NFT for the vote result
-            uint256 tokenId = lotteryResultNFT.mintLotteryResult(
-            lotteryId, lottery.winner, yield
-        );
-
-        emit NFTMinted(lotteryId, tokenId, lottery.winner);
+        emit LotteryFinalized(lotteryId, winner, yield);
     }
 
     function isLotteryActive(uint256 lotteryId) external view returns (bool) {

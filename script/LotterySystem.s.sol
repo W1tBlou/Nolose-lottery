@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {LotterySystem} from "../src/LotterySystem.sol";
-import {LotteryResultNFT} from "../src/LotteryResultNFT.sol";
 
 contract LotterySystemDeployScript is Script {
     function run() public {
@@ -15,20 +14,14 @@ contract LotterySystemDeployScript is Script {
         // Start broadcasting transactions
         vm.startBroadcast(owner);
 
-        // Deploy LotteryResultNFT
-        LotteryResultNFT lotteryResultNFT = new LotteryResultNFT();
-        console2.log("LotteryResultNFT deployed at:", address(lotteryResultNFT));
-
         // Deploy LotterySystem
         LotterySystem lotterySystem = new LotterySystem(
             usdc,
-            aavePool,
-            address(lotteryResultNFT)
+            aavePool
         );
         console2.log("LotterySystem deployed at:", address(lotterySystem));
 
         // Set up permissions and configurations
-        lotteryResultNFT.setLotterySystem(address(lotterySystem));
         console2.log("LotteryResultNFT configured with LotterySystem address");
 
         vm.stopBroadcast();
@@ -40,7 +33,6 @@ contract LotterySystemDeployScript is Script {
         console2.log("Owner:", owner);
         console2.log("USDC:", usdc);
         console2.log("Aave Pool:", aavePool);
-        console2.log("LotteryResultNFT:", address(lotteryResultNFT));
         console2.log("LotterySystem:", address(lotterySystem));
     }
 } 

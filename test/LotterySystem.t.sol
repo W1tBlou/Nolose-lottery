@@ -3,24 +3,26 @@ pragma solidity ^0.8.20;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {LotterySystem} from "../src/LotterySystem.sol";
-import {LotteryResultNFT} from "../src/LotteryResultNFT.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
 
 contract LotterySystemTest is Test {
+    using SafeERC20 for IERC20;
+
     LotterySystem public lotterySystem;
-    LotteryResultNFT public lotteryResultNFT;
     IERC20 public usdc;
     IPool public aavePool;
 
-    address public owner = address(1);
-    address public user1 = address(2);
-    address public user2 = address(3);
-    address public user3 = address(4);
+    address public owner = 0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503;
+    address public user1 = 0x4260193D14D89836E7e83E2238A091D5a737ffcA;
+    address public user2 = 0xC066ac5D385419B1A8c43A0E146fA439837a8B8c;
+    address public user3 = 0x46B2Ee09028B2512f10bAeA18A743Ca46A56F658;
 
     uint256 public constant INITIAL_BALANCE = 1000 * 10**6; // 1000 USDC (6 decimals)
     uint256 public constant STAKE_AMOUNT = 100 * 10**6; // 100 USDC
-    uint256 public constant LOTTERY_DURATION = 1 hours;
+    uint256 public constant LOTTERY_DURATION = 1 days;
     uint256 public constant STAKING_DURATION = 1 hours;
 
     function setUp() public {
@@ -33,11 +35,9 @@ contract LotterySystemTest is Test {
 
         // Deploy contracts
         vm.startPrank(owner);
-        lotteryResultNFT = new LotteryResultNFT();
         lotterySystem = new LotterySystem(
             address(usdc),
-            address(aavePool),
-            address(lotteryResultNFT)
+            address(aavePool)
         );
         vm.stopPrank();
 
@@ -76,7 +76,7 @@ contract LotterySystemTest is Test {
         assertEq(usdc.balanceOf(address(lotterySystem)), STAKE_AMOUNT);
     }
 
-    function testFailStakeAfterDeadline() public {
+    function test_RevertWhen_StakingAfterDeadline() public {
         // Create lottery
         vm.startPrank(owner);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
@@ -166,33 +166,46 @@ contract LotterySystemTest is Test {
         // Get winner
         assertTrue(winner != address(0));
 
-        // Verify NFT was minted
-        uint256 tokenId = lotteryResultNFT.voteToToken(1);
-        assertTrue(tokenId > 0);
-        assertEq(lotteryResultNFT.ownerOf(tokenId), winner);
 
         // Verify stake returns and yield distribution
         // All users should get their stakes back
-        assertEq(usdc.balanceOf(user1), user1BalanceBefore + STAKE_AMOUNT * 2);
-        assertEq(usdc.balanceOf(user2), user2BalanceBefore + STAKE_AMOUNT);
-        assertEq(usdc.balanceOf(user3), user3BalanceBefore + STAKE_AMOUNT);
+        assertTrue(usdc.balanceOf(user1) >= user1BalanceBefore + STAKE_AMOUNT * 2);
+        assertTrue(usdc.balanceOf(user2) >= user2BalanceBefore + STAKE_AMOUNT);
+        assertTrue(usdc.balanceOf(user3) >= user3BalanceBefore + STAKE_AMOUNT);
 
         // Winner should have received yield
-        assertTrue(usdc.balanceOf(winner) > user1BalanceBefore + STAKE_AMOUNT * 2);
+        if (winner == user1) {
+            assertTrue(usdc.balanceOf(user1) > user1BalanceBefore + STAKE_AMOUNT * 2);
+        } else if (winner == user2) {
+            assertTrue(usdc.balanceOf(user2) > user2BalanceBefore + STAKE_AMOUNT);
+        } else if (winner == user3) {
+            assertTrue(usdc.balanceOf(user3) > user3BalanceBefore + STAKE_AMOUNT);
+        }
     }
 
-    function testFailFinalizeLotteryBeforeDeadline() public {
+    function test_RevertWhen_FinalizingLotteryBeforeDeadline() public {
         // Create lottery
         vm.startPrank(owner);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
         vm.stopPrank();
+
+        // Stake
+        vm.startPrank(user1);
+        usdc.approve(address(lotterySystem), STAKE_AMOUNT);
+        lotterySystem.stake(1, STAKE_AMOUNT);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + STAKING_DURATION + 1);
+
+        // Finalize staking
+        lotterySystem.finalizeStaking(1);
 
         // Try to finalize before deadline
         vm.expectRevert("Lottery deadline not passed");
         lotterySystem.finalizeLottery(1);
     }
 
-    function testFailFinalizeLotteryBeforeStakingFinalized() public {
+    function test_RevertWhen_FinalizingLotteryBeforeStakingFinalized() public {
         // Create lottery
         vm.startPrank(owner);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
@@ -212,11 +225,27 @@ contract LotterySystemTest is Test {
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
         vm.stopPrank();
 
+        // Get aUSDC token address from Aave pool
+        address aUSDC = 0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4; // aUSDC on mainnet
+
+        // Record initial balances
+        uint256 initialPoolBalance = usdc.balanceOf(address(aavePool));
+        uint256 initialATokenBalance = IERC20(aUSDC).balanceOf(address(lotterySystem));
+        uint256 initialLotteryBalance = usdc.balanceOf(address(lotterySystem));
+
+        console2.log("Initial balances:");
+        console2.log("Pool USDC:", initialPoolBalance);
+        console2.log("Lottery aToken:", initialATokenBalance);
+        console2.log("Lottery USDC:", initialLotteryBalance);
+
         // Stake
         vm.startPrank(user1);
         usdc.approve(address(lotterySystem), STAKE_AMOUNT);
         lotterySystem.stake(1, STAKE_AMOUNT);
         vm.stopPrank();
+
+        // Verify stake was successful
+        assertEq(usdc.balanceOf(address(lotterySystem)), initialLotteryBalance + STAKE_AMOUNT, "Stake should increase lottery balance");
 
         // Move time past staking deadline
         vm.warp(block.timestamp + STAKING_DURATION + 1);
@@ -224,7 +253,23 @@ contract LotterySystemTest is Test {
         // Finalize staking
         lotterySystem.finalizeStaking(1);
 
-        // Verify USDC was supplied to Aave
-        assertEq(usdc.balanceOf(address(aavePool)), STAKE_AMOUNT);
+        // Move time forward to accumulate some yield
+        vm.warp(block.timestamp + 1 days);
+
+        // Get final balances
+        uint256 finalATokenBalance = IERC20(aUSDC).balanceOf(address(lotterySystem));
+        uint256 finalPoolBalance = usdc.balanceOf(address(aavePool));
+        uint256 finalLotteryBalance = usdc.balanceOf(address(lotterySystem));
+
+        console2.log("\nFinal balances:");
+        console2.log("Pool USDC:", finalPoolBalance);
+        console2.log("Lottery aToken:", finalATokenBalance);
+        console2.log("Lottery USDC:", finalLotteryBalance);
+
+        // Verify aToken balance increased (this means supply was successful)
+        assertTrue(finalATokenBalance > 0, "aToken balance should be greater than 0");
+        
+        // Verify USDC was transferred from lottery to pool
+        assertEq(finalLotteryBalance, 0, "Lottery should have 0 USDC after supply");
     }
 }
