@@ -57,11 +57,10 @@ contract RandomNumTest is Test {
         vm.stopPrank();
     }
 
-
     function testOnlyOwnerCanRoll() public {
         vm.startPrank(player1);
         vm.expectRevert();
         randomNum.rollDice(player1);
         vm.stopPrank();
     }
-} 
+}

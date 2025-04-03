@@ -4,7 +4,10 @@ pragma solidity ^0.8.20;
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {VRFConsumerBaseV2Plus, IVRFCoordinatorV2Plus} from "chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {
+    VRFConsumerBaseV2Plus,
+    IVRFCoordinatorV2Plus
+} from "chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 
 /**
@@ -43,27 +46,24 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
 
     // Mapping from random lottery ID to request ID
     mapping(uint256 => uint256) public randomLotteryIds;
-    
+
     // Mapping from lottery ID to voter address to stake index
     mapping(uint256 => mapping(address => uint256)) public stakes;
     mapping(uint256 => address[]) public stakers;
     mapping(uint256 => uint256) public totalStakes;
 
     // Counter for vote IDs
-    uint256 private _lotteryIdCounter = 1;    
-    
+    uint256 private _lotteryIdCounter = 1;
+
     // chainlink vrf variables
     uint256 public s_subscriptionId = 26855092016204205124453749677461341788139777924168207765380961489454212986163;
-    bytes32 public s_keyHash =
-        0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae;
+    bytes32 public s_keyHash = 0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae;
     uint32 public callbackGasLimit = 40000;
     uint16 public requestConfirmations = 3;
     uint32 public numWords = 1;
 
     // Events
-    event LotteryCreated(
-        uint256 indexed lotteryId, uint256 deadline, uint256 stakingDeadline, address initiator
-    );
+    event LotteryCreated(uint256 indexed lotteryId, uint256 deadline, uint256 stakingDeadline, address initiator);
     event StakeCast(uint256 indexed lotteryId, address indexed staker, uint256 amount);
     event LotteryFinalized(uint256 indexed lotteryId, address winner, uint256 yield);
     event LotteryStakingFinalized(uint256 indexed lotteryId, uint256 amount);
@@ -122,29 +122,34 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
             initiator: msg.sender
         });
 
-        emit LotteryCreated(lotteryId, block.timestamp + stakingDurationInSeconds + durationInSeconds, block.timestamp + stakingDurationInSeconds, msg.sender);
+        emit LotteryCreated(
+            lotteryId,
+            block.timestamp + stakingDurationInSeconds + durationInSeconds,
+            block.timestamp + stakingDurationInSeconds,
+            msg.sender
+        );
     }
 
     function stake(uint256 lotteryId, uint256 amount) external {
         //сюда можно добавить проверку закончился ли стакинг или нет
         Lottery storage lottery = lotteries[lotteryId];
-        
+
         require(lottery.id != 0, "Lottery does not exist");
         require(!lottery.stakingFinalized, "Lottery staking period has ended");
         require(block.timestamp < lottery.stakingDeadline, "Staking deadline passed");
         require(amount > 0, "Amount must be greater than 0");
         require(USDC.balanceOf(msg.sender) >= amount, "Insufficient USDC balance");
-        
+
         // Transfer USDC from user to contract
         require(USDC.transferFrom(msg.sender, address(this), amount), "USDC transfer failed");
-        
+
         // Record the stake
         if (stakes[lotteryId][msg.sender] == 0) {
             stakers[lotteryId].push(msg.sender);
         }
         stakes[lotteryId][msg.sender] += amount;
         totalStakes[lotteryId] += amount;
-        
+
         emit StakeCast(lotteryId, msg.sender, amount);
     }
 
@@ -155,12 +160,12 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
         require(lottery.id != 0, "Lottery does not exist");
         require(!lottery.stakingFinalized, "Lottery staking already finalized");
         require(block.timestamp >= lottery.stakingDeadline, "Lottery staking deadline not passed");
-    
+
         lottery.stakingFinalized = true;
-        
+
         // Approve USDC spending for Aave pool
         // require(USDC.approve(address(aavePool), amount), "USDC approval failed");
-        
+
         // // Supply USDC to Aave pool
         // try aavePool.supply(address(USDC), amount, address(this), 0) {
         //     // Successfully supplied to Aave
@@ -188,19 +193,19 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
         require(lottery.stakingFinalized, "Staking not finalized");
         require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
         require(lottery.randomNumber != 0, "Random number not set");
-        
+
         uint256 originalStake = totalStakes[lotteryId];
-        
+
         // First, select the winner before any external calls
         address[] memory stakersList = stakers[lotteryId];
         require(stakersList.length > 0, "No stakers in lottery");
-        
+
         // Select random winner from VRF
         uint256 randomValue = lottery.randomNumber;
-        
+
         // Scale down to range [0, totalStakes[lotteryId]]
         uint256 scaledRandom = randomValue % totalStakes[lotteryId];
-        
+
         uint256 cumulativeStake = 0;
         address winner;
 
@@ -209,14 +214,14 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
             address staker = stakersList[i];
             uint256 stakeAmount = stakes[lotteryId][staker];
             require(stakeAmount > 0, "Invalid stake amount");
-            
+
             cumulativeStake += stakeAmount;
             if (cumulativeStake > scaledRandom && winner == address(0)) {
                 winner = staker;
                 break;
             }
         }
-        
+
         require(winner != address(0), "No winner selected");
         lottery.winner = winner;
 
@@ -267,7 +272,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
         return _lotteryIdCounter - 1;
     }
 
-      /**
+    /**
      * @notice Requests randomness
      * @dev Warning: if the VRF response is delayed, avoid calling requestRandomness repeatedly
      * as that would give miners/VRF operators latitude about which VRF response arrives first.
@@ -275,9 +280,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
      *
      * @param roller address of the roller
      */
-    function rollDice(
-        address roller
-    ) public  onlyLotteryOwner returns (uint256 requestId) {
+    function rollDice(address roller) public onlyLotteryOwner returns (uint256 requestId) {
         // require(s_results[roller] == 0, "Already rolled");
         // Will revert if subscription is not set and funded.
         requestId = s_vrfCoordinator.requestRandomWords(
@@ -309,10 +312,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus {
      * @param requestId uint256
      * @param randomWords  uint256[] The random result returned by the oracle.
      */
-    function fulfillRandomWords(
-        uint256 requestId,
-        uint256[] calldata randomWords
-    ) internal override {
+    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
         // Get random value from VRF
         uint256 randomValue = randomWords[0];
         // Store random value in lottery

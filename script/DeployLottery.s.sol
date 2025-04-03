@@ -8,23 +8,17 @@ contract DeployLottery is Script {
     function setUp() public {}
 
     function run() public {
-        // Get private key from environment and ensure it has 0x prefix
-        string memory privateKeyStr = vm.envString("PRIVATE_KEY");
-        if (bytes(privateKeyStr)[0] != "0") {
-            privateKeyStr = string(abi.encodePacked("0x", privateKeyStr));
-        }
-        uint256 deployerPrivateKey = vm.parseUint(privateKeyStr);
-        
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
-        // Get addresses from environment variables
+        // Get contract addresses from environment
         address usdcAddress = vm.envAddress("SEPOLIA_USDC_ADDRESS");
         address aavePoolAddress = vm.envAddress("SEPOLIA_AAVE_POOL_ADDRESS");
 
         // Deploy LotterySystem
         LotterySystem lottery = new LotterySystem(usdcAddress, aavePoolAddress);
-        console2.log("LotterySystem deployed to:", address(lottery));
+        console2.log("LotterySystem deployed to Sepolia at:", address(lottery));
 
         vm.stopBroadcast();
     }
-} 
+}

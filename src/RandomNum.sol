@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import {VRFConsumerBaseV2Plus, IVRFCoordinatorV2Plus} from "chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {
+    VRFConsumerBaseV2Plus,
+    IVRFCoordinatorV2Plus
+} from "chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 
 /**
@@ -19,7 +22,6 @@ import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VR
  * THIS IS AN EXAMPLE CONTRACT THAT USES UN-AUDITED CODE.
  * DO NOT USE THIS CODE IN PRODUCTION.
  */
-
 contract RandomNum is VRFConsumerBaseV2Plus {
     uint256 private constant ROLL_IN_PROGRESS = 42;
     uint256 private constant MY_SUM_STAKE = 20;
@@ -33,8 +35,7 @@ contract RandomNum is VRFConsumerBaseV2Plus {
     // The gas lane to use, which specifies the maximum gas price to bump to.
     // For a list of available gas lanes on each network,
     // see https://docs.chain.link/vrf/v2-5/supported-networks#configurations
-    bytes32 public s_keyHash =
-        0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae;
+    bytes32 public s_keyHash = 0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae;
 
     // Depends on the number of requested values that you want sent to the
     // fulfillRandomWords() function. Storing each word costs about 20,000 gas,
@@ -67,10 +68,7 @@ contract RandomNum is VRFConsumerBaseV2Plus {
      * @param subscriptionId subscription ID that this consumer contract can use
      * @param _vrfCoordinator VRF coordinator address
      */
-    constructor(
-        uint256 subscriptionId,
-        address _vrfCoordinator
-    ) VRFConsumerBaseV2Plus(_vrfCoordinator) {
+    constructor(uint256 subscriptionId, address _vrfCoordinator) VRFConsumerBaseV2Plus(_vrfCoordinator) {
         s_subscriptionId = subscriptionId;
         vrfCoordinator = _vrfCoordinator;
         s_vrfCoordinator = IVRFCoordinatorV2Plus(_vrfCoordinator);
@@ -92,9 +90,7 @@ contract RandomNum is VRFConsumerBaseV2Plus {
      *
      * @param roller address of the roller
      */
-    function rollDice(
-        address roller
-    ) public  onlyOwner returns (uint256 requestId) {
+    function rollDice(address roller) public onlyOwner returns (uint256 requestId) {
         require(s_results[roller] == 0, "Already rolled");
         // Will revert if subscription is not set and funded.
         requestId = s_vrfCoordinator.requestRandomWords(
@@ -129,13 +125,9 @@ contract RandomNum is VRFConsumerBaseV2Plus {
      * @param requestId uint256
      * @param randomWords  uint256[] The random result returned by the oracle.
      */
-    function fulfillRandomWords(
-        uint256 requestId,
-        uint256[] calldata randomWords
-    ) internal override {
+    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
         uint256 d20Value = (randomWords[0] % MY_SUM_STAKE) + 1;
         s_results[s_rollers[requestId]] = d20Value;
         emit DiceLanded(requestId, d20Value);
     }
-
 }

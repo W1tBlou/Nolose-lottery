@@ -7,9 +7,7 @@ import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VR
 contract MockVRFCoordinator {
     uint256 internal counter = 10;
 
-    function requestRandomWords(
-        VRFV2PlusClient.RandomWordsRequest calldata req
-    ) external returns (uint256 requestId) {
+    function requestRandomWords(VRFV2PlusClient.RandomWordsRequest calldata req) external returns (uint256 requestId) {
         requestId = counter;
         VRFConsumerBaseV2Plus consumer = VRFConsumerBaseV2Plus(msg.sender);
         uint256[] memory randomWords = new uint256[](req.numWords);
@@ -20,4 +18,4 @@ contract MockVRFCoordinator {
         counter += 1;
         return requestId;
     }
-} 
+}
