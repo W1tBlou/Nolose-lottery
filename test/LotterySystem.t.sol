@@ -226,15 +226,13 @@ contract LotterySystemTest is Test {
         vm.stopPrank();
 
         // Get aUSDC token address from Aave pool
-        address aUSDC = 0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4; // aUSDC on mainnet
+        IERC20 aUSDC = IERC20(0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c); // aUSDC on mainnet
 
         // Record initial balances
-        uint256 initialPoolBalance = usdc.balanceOf(address(aavePool));
-        uint256 initialATokenBalance = IERC20(aUSDC).balanceOf(address(lotterySystem));
+        uint256 initialATokenBalance = aUSDC.balanceOf(address(lotterySystem));
         uint256 initialLotteryBalance = usdc.balanceOf(address(lotterySystem));
 
         console2.log("Initial balances:");
-        console2.log("Pool USDC:", initialPoolBalance);
         console2.log("Lottery aToken:", initialATokenBalance);
         console2.log("Lottery USDC:", initialLotteryBalance);
 
@@ -243,6 +241,11 @@ contract LotterySystemTest is Test {
         usdc.approve(address(lotterySystem), STAKE_AMOUNT);
         lotterySystem.stake(1, STAKE_AMOUNT);
         vm.stopPrank();
+
+        console2.log("\nAfter user stake balances:");
+        console2.log("Lottery USDC:", usdc.balanceOf(address(lotterySystem)));
+        console2.log("Lottery aToken:", aUSDC.balanceOf(address(lotterySystem)));
+        console2.log("Lottery contract address:", address(lotterySystem)); //0x9b21048DFf778b7A0f8Ce510B1c49373553D568d
 
         // Verify stake was successful
         assertEq(usdc.balanceOf(address(lotterySystem)), initialLotteryBalance + STAKE_AMOUNT, "Stake should increase lottery balance");
@@ -257,12 +260,10 @@ contract LotterySystemTest is Test {
         vm.warp(block.timestamp + 1 days);
 
         // Get final balances
-        uint256 finalATokenBalance = IERC20(aUSDC).balanceOf(address(lotterySystem));
-        uint256 finalPoolBalance = usdc.balanceOf(address(aavePool));
+        uint256 finalATokenBalance = aUSDC.balanceOf(address(lotterySystem));
         uint256 finalLotteryBalance = usdc.balanceOf(address(lotterySystem));
 
         console2.log("\nFinal balances:");
-        console2.log("Pool USDC:", finalPoolBalance);
         console2.log("Lottery aToken:", finalATokenBalance);
         console2.log("Lottery USDC:", finalLotteryBalance);
 
