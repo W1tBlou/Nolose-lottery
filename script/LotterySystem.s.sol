@@ -7,9 +7,14 @@ import {LotterySystem} from "../src/LotterySystem.sol";
 contract LotterySystemDeployScript is Script {
     function run() public {
         // Get deployment parameters from environment variables
-        address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-        address aavePool = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
-        address owner = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+        address usdc = vm.envAddress("USDC_ADDRESS");
+        address aavePool = vm.envAddress("AAVE_POOL_ADDRESS");
+        address owner = vm.envAddress("OWNER_ADDRESS");
+
+        console2.log("Starting deployment with parameters:");
+        console2.log("USDC:", usdc);
+        console2.log("Aave Pool:", aavePool);
+        console2.log("Owner:", owner);
 
         // Start broadcasting transactions
         vm.startBroadcast(owner);
@@ -19,6 +24,13 @@ contract LotterySystemDeployScript is Script {
             usdc,
             aavePool
         );
+
+        // Verify deployment
+        require(address(lotterySystem) != address(0), "Deployment failed");
+        require(lotterySystem.owner() == owner, "Owner not set correctly");
+        require(address(lotterySystem.USDC()) == usdc, "USDC not set correctly");
+        require(address(lotterySystem.aavePool()) == aavePool, "Aave Pool not set correctly");
+
         console2.log("LotterySystem deployed at:", address(lotterySystem));
 
         vm.stopBroadcast();
@@ -31,5 +43,6 @@ contract LotterySystemDeployScript is Script {
         console2.log("USDC:", usdc);
         console2.log("Aave Pool:", aavePool);
         console2.log("LotterySystem:", address(lotterySystem));
+        console2.log("Deployment successful!");
     }
-} 
+}

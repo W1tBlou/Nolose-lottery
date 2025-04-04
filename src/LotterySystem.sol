@@ -24,6 +24,7 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         bool finalized;
         bool stakingFinalized;
         address winner;
+        uint256 yield;
         address initiator;
     }
 
@@ -65,6 +66,7 @@ contract LotterySystem is Ownable, ReentrancyGuard {
             finalized: false,
             stakingFinalized: false,
             winner: address(0),
+            yield: 0,
             initiator: msg.sender
         });
 
@@ -118,20 +120,11 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         emit LotteryStakingFinalized(lotteryId, amount);
     }
 
-    function _stakeBackTransfer(address staker, uint256 userStake) internal nonReentrant {
-        require(USDC.transfer(staker, userStake), "USDC transfer failed");
-    }
-
-    function finalizeLottery(uint256 lotteryId) external {
+    function _choseWinner(uint256 lotteryId) internal returns (address) {
         Lottery storage lottery = lotteries[lotteryId];
 
         require(lottery.id != 0, "Lottery does not exist");
-        require(!lottery.finalized, "Lottery already finalized");
-        require(lottery.stakingFinalized, "Staking not finalized");
-        require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
-        
-        uint256 originalStake = totalStakes[lotteryId];
-        
+
         // First, select the winner before any external calls
         address[] memory stakersList = stakers[lotteryId];
         require(stakersList.length > 0, "No stakers in lottery");
@@ -165,38 +158,59 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         require(winner != address(0), "No winner selected");
         lottery.winner = winner;
 
-        // Withdraw from Aave after winner selection
+        return winner;
+    }   
+    
+    function _withdrawYield(uint256 lotteryId) internal returns (uint256) {
+        uint256 originalStake = totalStakes[lotteryId];
+
         try aavePool.withdraw(address(USDC), type(uint256).max, address(this)) {
             // Successfully withdrawn from Aave
         } catch {
             revert("Failed to withdraw from Aave pool");
         }
-
         // Get the actual amount withdrawn
         uint256 amountWithYield = USDC.balanceOf(address(this));
         require(amountWithYield >= originalStake, "Yield cannot be negative");
         uint256 yield = amountWithYield - originalStake;
 
-        // Store stakes in memory to prevent reentrancy
-        uint256[] memory userStakes = new uint256[](stakersList.length);
-        for (uint256 i = 0; i < stakersList.length; i++) {
-            userStakes[i] = stakes[lotteryId][stakersList[i]];
+        return yield;
+    }
+
+    function _stakeBackTransfer(address staker, uint256 userStake) internal nonReentrant {
+        require(USDC.transfer(staker, userStake), "USDC transfer failed");
+    }
+
+    function takeWinnings(uint256 lotteryId) external {
+        Lottery storage lottery = lotteries[lotteryId];
+        
+        require(lottery.id != 0, "Lottery does not exist");
+        require(lottery.stakingFinalized, "Staking not finalized");
+        require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
+
+        uint256 userStake = stakes[lotteryId][msg.sender];
+        require(userStake > 0, "User has no stake in this lottery or already took winnings");    
+
+        if (lottery.winner == address(0)) {
+            lottery.winner = _choseWinner(lotteryId);
+            emit WinnerSelected(lotteryId, lottery.winner, lottery.yield);
         }
 
-        // Return original stakes to all participants
-        for (uint256 i = 0; i < stakersList.length; i++) {
-            if (userStakes[i] > 0) {
-                _stakeBackTransfer(stakersList[i], userStakes[i]);
-            }
+        // Withdraw from Aave after winner selection
+        if (lottery.yield == 0) {
+            lottery.yield = _withdrawYield(lotteryId);
+            
+            lottery.finalized = true;
+            emit LotteryFinalized(lotteryId, lottery.winner, lottery.yield);
         }
 
-        // Send yield to winner
-        _stakeBackTransfer(winner, yield);
-
-        emit WinnerSelected(lotteryId, winner, yield);
-
-        lottery.finalized = true;
-        emit LotteryFinalized(lotteryId, winner, yield);
+        // Send winnings to user
+        if (msg.sender == lottery.winner) {
+            _stakeBackTransfer(lottery.winner,  userStake + lottery.yield);
+        } else {
+            _stakeBackTransfer(msg.sender, userStake);
+        }
+        stakes[lotteryId][msg.sender] = 0;
     }
 
     function isLotteryActive(uint256 lotteryId) external view returns (bool) {

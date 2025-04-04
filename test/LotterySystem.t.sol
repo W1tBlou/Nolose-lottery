@@ -116,11 +116,11 @@ contract LotterySystemTest is Test {
         lotterySystem.finalizeStaking(1);
 
         // Verify staking is finalized
-        (,,,,bool stakingFinalized,,) = lotterySystem.lotteries(1);
+        (,,,,bool stakingFinalized,,,) = lotterySystem.lotteries(1);
         assertTrue(stakingFinalized);
     }
 
-    function testFinalizeLotteryAndWinnerSelection() public {
+    function testTakeWinningsAndWinnerSelection() public {
         // Create lottery
         vm.startPrank(owner);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
@@ -151,21 +151,30 @@ contract LotterySystemTest is Test {
         // Move time past lottery deadline
         vm.warp(block.timestamp + LOTTERY_DURATION + 1);
 
-        // Record balances before finalization
+        // Record balances before taking winnings
         uint256 user1BalanceBefore = usdc.balanceOf(user1);
         uint256 user2BalanceBefore = usdc.balanceOf(user2);
         uint256 user3BalanceBefore = usdc.balanceOf(user3);
 
-        // Finalize lottery
-        lotterySystem.finalizeLottery(1);
+        // Take winnings for all users
+        vm.startPrank(user1);
+        lotterySystem.takeWinnings(1);
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        lotterySystem.takeWinnings(1);
+        vm.stopPrank();
+
+        vm.startPrank(user3);
+        lotterySystem.takeWinnings(1);
+        vm.stopPrank();
 
         // Verify lottery is finalized
-        (uint256 id, uint256 deadline, uint256 stakingDeadline, bool finalized, bool stakingFinalized, address winner, address initiator) = lotterySystem.lotteries(1);
+        (,,, bool finalized,,address winner,,) = lotterySystem.lotteries(1);
         assertTrue(finalized);
 
         // Get winner
         assertTrue(winner != address(0));
-
 
         // Verify stake returns and yield distribution
         // All users should get their stakes back
@@ -183,7 +192,7 @@ contract LotterySystemTest is Test {
         }
     }
 
-    function test_RevertWhen_FinalizingLotteryBeforeDeadline() public {
+    function test_RevertWhen_TakingWinningsBeforeDeadline() public {
         // Create lottery
         vm.startPrank(owner);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
@@ -200,12 +209,13 @@ contract LotterySystemTest is Test {
         // Finalize staking
         lotterySystem.finalizeStaking(1);
 
-        // Try to finalize before deadline
+        // Try to take winnings before deadline
+        vm.startPrank(user1);
         vm.expectRevert("Lottery deadline not passed");
-        lotterySystem.finalizeLottery(1);
+        lotterySystem.takeWinnings(1);
     }
 
-    function test_RevertWhen_FinalizingLotteryBeforeStakingFinalized() public {
+    function test_RevertWhen_TakingWinningsBeforeStakingFinalized() public {
         // Create lottery
         vm.startPrank(owner);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
@@ -214,9 +224,10 @@ contract LotterySystemTest is Test {
         // Move time past lottery deadline
         vm.warp(block.timestamp + LOTTERY_DURATION + 1);
 
-        // Try to finalize before staking is finalized
+        // Try to take winnings before staking is finalized
+        vm.startPrank(user1);
         vm.expectRevert("Staking not finalized");
-        lotterySystem.finalizeLottery(1);
+        lotterySystem.takeWinnings(1);
     }
 
     function testAaveIntegration() public {
@@ -245,7 +256,7 @@ contract LotterySystemTest is Test {
         console2.log("\nAfter user stake balances:");
         console2.log("Lottery USDC:", usdc.balanceOf(address(lotterySystem)));
         console2.log("Lottery aToken:", aUSDC.balanceOf(address(lotterySystem)));
-        console2.log("Lottery contract address:", address(lotterySystem)); //0x9b21048DFf778b7A0f8Ce510B1c49373553D568d
+        console2.log("Lottery contract address:", address(lotterySystem));
 
         // Verify stake was successful
         assertEq(usdc.balanceOf(address(lotterySystem)), initialLotteryBalance + STAKE_AMOUNT, "Stake should increase lottery balance");
@@ -253,7 +264,7 @@ contract LotterySystemTest is Test {
         // Move time past staking deadline
         vm.warp(block.timestamp + STAKING_DURATION + 1);
 
-        // Finalize staking
+        // Finalize staking 
         lotterySystem.finalizeStaking(1);
 
         // Move time forward to accumulate some yield
