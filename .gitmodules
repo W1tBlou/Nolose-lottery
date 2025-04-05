@@ -6,7 +6,7 @@
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 [submodule "lib/chainlink"]
 	path = lib/chainlink
-	url = https://github.com/smartcontractkit/chainlink
+	url = https://github.com/smartcontractkit/chainlink.git
 [submodule "lib/aave-v3-core"]
 	path = lib/aave-v3-core
 	url = https://github.com/aave/aave-v3-core

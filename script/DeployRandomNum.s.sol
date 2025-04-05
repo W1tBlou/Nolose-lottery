@@ -28,7 +28,7 @@ contract DeployRandomNum is Script {
             address vrfCoordinator = 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B;
             // Using the correct subscription ID
             uint256 subscriptionId = 26855092016204205124453749677461341788139777924168207765380961489454212986163;
-            
+
             // Deploy RandomNum with Sepolia VRF coordinator
             RandomNum randomNum = new RandomNum(subscriptionId, vrfCoordinator);
             console2.log("RandomNum deployed to Sepolia at:", address(randomNum));
@@ -36,4 +36,4 @@ contract DeployRandomNum is Script {
 
         vm.stopBroadcast();
     }
-} 
+}
