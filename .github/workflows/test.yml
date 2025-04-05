@@ -48,7 +48,7 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          forge test -vvv --fork-url http://127.0.0.1:8545
+          source .env.anvil && forge test -vvv --fork-url $ANVIL_RPC_URL
         id: test
 
       - name: Cleanup anvil
