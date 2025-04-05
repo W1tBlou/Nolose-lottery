@@ -112,7 +112,7 @@ contract LotterySystemTest is Test {
         lotterySystem.finalizeStaking(1);
 
         // Verify staking is finalized
-        (,,,, bool stakingFinalized,,,) = lotterySystem.lotteries(1);
+        (,,,, bool stakingFinalized,,,,,) = lotterySystem.lotteries(1);
         assertTrue(stakingFinalized);
     }
 
@@ -166,7 +166,7 @@ contract LotterySystemTest is Test {
         vm.stopPrank();
 
         // Verify lottery is finalized
-        (,,, bool finalized,, address winner,,) = lotterySystem.lotteries(1);
+        (,,, bool finalized,, address winner,,,,) = lotterySystem.lotteries(1);
         assertTrue(finalized);
 
         // Get winner

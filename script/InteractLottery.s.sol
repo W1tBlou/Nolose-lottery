@@ -43,6 +43,7 @@ contract InteractLottery is Script {
             address winner,
             uint256 randomRequestId,
             uint256 randomNumber,
+            uint256 yield,
             address initiator
         ) = lottery.lotteries(1);
         console2.log("Lottery ID: %s", id);

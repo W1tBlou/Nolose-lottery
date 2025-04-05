@@ -64,7 +64,6 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
 
     // Events
     event LotteryCreated(uint256 indexed lotteryId, uint256 deadline, uint256 stakingDeadline, address initiator);
-    event LotteryCreated(uint256 indexed lotteryId, uint256 deadline, uint256 stakingDeadline, address initiator);
     event StakeCast(uint256 indexed lotteryId, address indexed staker, uint256 amount);
     event LotteryFinalized(uint256 indexed lotteryId, address winner, uint256 yield);
     event LotteryStakingFinalized(uint256 indexed lotteryId, uint256 amount);
@@ -132,12 +131,6 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
             block.timestamp + stakingDurationInSeconds,
             msg.sender
         );
-        emit LotteryCreated(
-            lotteryId,
-            block.timestamp + stakingDurationInSeconds + durationInSeconds,
-            block.timestamp + stakingDurationInSeconds,
-            msg.sender
-        );
     }
 
     function stake(uint256 lotteryId, uint256 amount) external {
@@ -163,7 +156,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         emit StakeCast(lotteryId, msg.sender, amount);
     }
 
-    function finalizeStaking(uint256 lotteryId) internal {
+    function finalizeStaking(uint256 lotteryId) public {
         Lottery storage lottery = lotteries[lotteryId];
         uint256 amount = totalStakes[lotteryId];
 
@@ -255,7 +248,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         require(USDC.transfer(staker, userStake), "USDC transfer failed");
     }
 
-    function takeWinnings(uint256 lotteryId) external {
+    function takeWinnings(uint256 lotteryId) public {
         Lottery storage lottery = lotteries[lotteryId];
 
         require(lottery.id != 0, "Lottery does not exist");
@@ -382,13 +375,13 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
                     && lotteries[i].randomNumber != 0
             ) {
                 emit DelayedFunctionExecuted(msg.sender, block.timestamp, i);
-                finalizeLottery(i);
+                takeWinnings(i);
                 break;
             } else if (
                 lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].stakingDeadline
             ) {
                 emit DelayedFunctionExecuted(msg.sender, block.timestamp, i);
-                finalizeStaking(i);
+                takeWinnings(i);
                 break;
             }
         }
