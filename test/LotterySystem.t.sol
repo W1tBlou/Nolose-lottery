@@ -7,7 +7,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-
 contract LotterySystemTest is Test {
     using SafeERC20 for IERC20;
 
@@ -20,8 +19,8 @@ contract LotterySystemTest is Test {
     address public user2 = 0xC066ac5D385419B1A8c43A0E146fA439837a8B8c;
     address public user3 = 0x46B2Ee09028B2512f10bAeA18A743Ca46A56F658;
 
-    uint256 public constant INITIAL_BALANCE = 1000 * 10**6; // 1000 USDC (6 decimals)
-    uint256 public constant STAKE_AMOUNT = 100 * 10**6; // 100 USDC
+    uint256 public constant INITIAL_BALANCE = 1000 * 10 ** 6; // 1000 USDC (6 decimals)
+    uint256 public constant STAKE_AMOUNT = 100 * 10 ** 6; // 100 USDC
     uint256 public constant LOTTERY_DURATION = 1 days;
     uint256 public constant STAKING_DURATION = 1 hours;
 
@@ -35,10 +34,7 @@ contract LotterySystemTest is Test {
 
         // Deploy contracts
         vm.startPrank(owner);
-        lotterySystem = new LotterySystem(
-            address(usdc),
-            address(aavePool)
-        );
+        lotterySystem = new LotterySystem(address(usdc), address(aavePool));
         vm.stopPrank();
 
         // Setup test users
@@ -116,7 +112,7 @@ contract LotterySystemTest is Test {
         lotterySystem.finalizeStaking(1);
 
         // Verify staking is finalized
-        (,,,,bool stakingFinalized,,,) = lotterySystem.lotteries(1);
+        (,,,, bool stakingFinalized,,,) = lotterySystem.lotteries(1);
         assertTrue(stakingFinalized);
     }
 
@@ -170,7 +166,7 @@ contract LotterySystemTest is Test {
         vm.stopPrank();
 
         // Verify lottery is finalized
-        (,,, bool finalized,,address winner,,) = lotterySystem.lotteries(1);
+        (,,, bool finalized,, address winner,,) = lotterySystem.lotteries(1);
         assertTrue(finalized);
 
         // Get winner
@@ -259,12 +255,16 @@ contract LotterySystemTest is Test {
         console2.log("Lottery contract address:", address(lotterySystem));
 
         // Verify stake was successful
-        assertEq(usdc.balanceOf(address(lotterySystem)), initialLotteryBalance + STAKE_AMOUNT, "Stake should increase lottery balance");
+        assertEq(
+            usdc.balanceOf(address(lotterySystem)),
+            initialLotteryBalance + STAKE_AMOUNT,
+            "Stake should increase lottery balance"
+        );
 
         // Move time past staking deadline
         vm.warp(block.timestamp + STAKING_DURATION + 1);
 
-        // Finalize staking 
+        // Finalize staking
         lotterySystem.finalizeStaking(1);
 
         // Move time forward to accumulate some yield
@@ -280,7 +280,7 @@ contract LotterySystemTest is Test {
 
         // Verify aToken balance increased (this means supply was successful)
         assertTrue(finalATokenBalance > 0, "aToken balance should be greater than 0");
-        
+
         // Verify USDC was transferred from lottery to pool
         assertEq(finalLotteryBalance, 0, "Lottery should have 0 USDC after supply");
     }

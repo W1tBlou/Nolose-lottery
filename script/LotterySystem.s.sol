@@ -20,10 +20,7 @@ contract LotterySystemDeployScript is Script {
         vm.startBroadcast(owner);
 
         // Deploy LotterySystem
-        LotterySystem lotterySystem = new LotterySystem(
-            usdc,
-            aavePool
-        );
+        LotterySystem lotterySystem = new LotterySystem(usdc, aavePool);
 
         // Verify deployment
         require(address(lotterySystem) != address(0), "Deployment failed");

@@ -15,7 +15,6 @@ contract LotterySystem is Ownable, ReentrancyGuard {
     IERC20 public USDC;
     IPool public aavePool;
 
-
     // Lottery structure
     struct Lottery {
         uint256 id;
@@ -30,7 +29,7 @@ contract LotterySystem is Ownable, ReentrancyGuard {
 
     // Mapping from vote ID to Vote
     mapping(uint256 => Lottery) public lotteries;
-    
+
     // Mapping from lottery ID to voter address to stake index
     mapping(uint256 => mapping(address => uint256)) public stakes;
     mapping(uint256 => address[]) public stakers;
@@ -40,9 +39,7 @@ contract LotterySystem is Ownable, ReentrancyGuard {
     uint256 private _lotteryIdCounter = 1;
 
     // Events
-    event LotteryCreated(
-        uint256 indexed lotteryId, uint256 deadline, uint256 stakingDeadline, address initiator
-    );
+    event LotteryCreated(uint256 indexed lotteryId, uint256 deadline, uint256 stakingDeadline, address initiator);
     event StakeCast(uint256 indexed lotteryId, address indexed staker, uint256 amount);
     event LotteryFinalized(uint256 indexed lotteryId, address winner, uint256 yield);
     event LotteryStakingFinalized(uint256 indexed lotteryId, uint256 amount);
@@ -70,29 +67,34 @@ contract LotterySystem is Ownable, ReentrancyGuard {
             initiator: msg.sender
         });
 
-        emit LotteryCreated(lotteryId, block.timestamp + stakingDurationInSeconds + durationInSeconds, block.timestamp + stakingDurationInSeconds, msg.sender);
+        emit LotteryCreated(
+            lotteryId,
+            block.timestamp + stakingDurationInSeconds + durationInSeconds,
+            block.timestamp + stakingDurationInSeconds,
+            msg.sender
+        );
     }
 
     function stake(uint256 lotteryId, uint256 amount) external {
         //сюда можно добавить проверку закончился ли стакинг или нет
         Lottery storage lottery = lotteries[lotteryId];
-        
+
         require(lottery.id != 0, "Lottery does not exist");
         require(!lottery.stakingFinalized, "Lottery staking period has ended");
         require(block.timestamp < lottery.stakingDeadline, "Staking deadline passed");
         require(amount > 0, "Amount must be greater than 0");
         require(USDC.balanceOf(msg.sender) >= amount, "Insufficient USDC balance");
-        
+
         // Transfer USDC from user to contract
         require(USDC.transferFrom(msg.sender, address(this), amount), "USDC transfer failed");
-        
+
         // Record the stake
         if (stakes[lotteryId][msg.sender] == 0) {
             stakers[lotteryId].push(msg.sender);
         }
         stakes[lotteryId][msg.sender] += amount;
         totalStakes[lotteryId] += amount;
-        
+
         emit StakeCast(lotteryId, msg.sender, amount);
     }
 
@@ -103,12 +105,12 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         require(lottery.id != 0, "Lottery does not exist");
         require(!lottery.stakingFinalized, "Lottery staking already finalized");
         require(block.timestamp >= lottery.stakingDeadline, "Lottery staking deadline not passed");
-    
+
         lottery.stakingFinalized = true;
-        
+
         // Approve USDC spending for Aave pool
         require(USDC.approve(address(aavePool), amount), "USDC approval failed");
-        
+
         // Supply USDC to Aave pool
         try aavePool.supply(address(USDC), amount, address(this), 0) {
             // Successfully supplied to Aave
@@ -128,17 +130,14 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         // First, select the winner before any external calls
         address[] memory stakersList = stakers[lotteryId];
         require(stakersList.length > 0, "No stakers in lottery");
-        
+
         // Select random winner
-        uint256 randomValue = uint256(keccak256(abi.encodePacked(
-            blockhash(block.number - 1),
-            block.timestamp,
-            msg.sender
-        )));
-        
+        uint256 randomValue =
+            uint256(keccak256(abi.encodePacked(blockhash(block.number - 1), block.timestamp, msg.sender)));
+
         // Scale down to range [0, totalStakes[lotteryId]]
         uint256 scaledRandom = randomValue % totalStakes[lotteryId];
-        
+
         uint256 cumulativeStake = 0;
         address winner;
 
@@ -147,20 +146,20 @@ contract LotterySystem is Ownable, ReentrancyGuard {
             address staker = stakersList[i];
             uint256 stakeAmount = stakes[lotteryId][staker];
             require(stakeAmount > 0, "Invalid stake amount");
-            
+
             cumulativeStake += stakeAmount;
             if (cumulativeStake > scaledRandom && winner == address(0)) {
                 winner = staker;
                 break;
             }
         }
-        
+
         require(winner != address(0), "No winner selected");
         lottery.winner = winner;
 
         return winner;
-    }   
-    
+    }
+
     function _withdrawYield(uint256 lotteryId) internal returns (uint256) {
         uint256 originalStake = totalStakes[lotteryId];
 
@@ -183,13 +182,13 @@ contract LotterySystem is Ownable, ReentrancyGuard {
 
     function takeWinnings(uint256 lotteryId) external {
         Lottery storage lottery = lotteries[lotteryId];
-        
+
         require(lottery.id != 0, "Lottery does not exist");
         require(lottery.stakingFinalized, "Staking not finalized");
         require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
 
         uint256 userStake = stakes[lotteryId][msg.sender];
-        require(userStake > 0, "User has no stake in this lottery or already took winnings");    
+        require(userStake > 0, "User has no stake in this lottery or already took winnings");
 
         if (lottery.winner == address(0)) {
             lottery.winner = _choseWinner(lotteryId);
@@ -199,14 +198,14 @@ contract LotterySystem is Ownable, ReentrancyGuard {
         // Withdraw from Aave after winner selection
         if (lottery.yield == 0) {
             lottery.yield = _withdrawYield(lotteryId);
-            
+
             lottery.finalized = true;
             emit LotteryFinalized(lotteryId, lottery.winner, lottery.yield);
         }
 
         // Send winnings to user
         if (msg.sender == lottery.winner) {
-            _stakeBackTransfer(lottery.winner,  userStake + lottery.yield);
+            _stakeBackTransfer(lottery.winner, userStake + lottery.yield);
         } else {
             _stakeBackTransfer(msg.sender, userStake);
         }
