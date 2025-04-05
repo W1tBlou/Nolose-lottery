@@ -16,9 +16,9 @@ contract DeployLottery is Script {
         // Get contract addresses from environment
         address usdcAddress = vm.envAddress("SEPOLIA_USDC_ADDRESS");
         address aavePoolAddress = vm.envAddress("SEPOLIA_AAVE_POOL_ADDRESS");
-
+        address vrfCoordinatorAddress = vm.envAddress("SEPOLIA_VRF_COORDINATOR_ADDRESS");
         // Deploy LotterySystem
-        LotterySystem lottery = new LotterySystem(usdcAddress, aavePoolAddress);
+        LotterySystem lottery = new LotterySystem(usdcAddress, aavePoolAddress, vrfCoordinatorAddress);
         console2.log("LotterySystem deployed to Sepolia at:", address(lottery));
 
         vm.stopBroadcast();

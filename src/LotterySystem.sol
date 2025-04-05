@@ -22,8 +22,8 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
     IPool public aavePool;
 
     // Fixed VRF coordinator address
-    address public constant vrfCoordinator = 0x271682DEB8C4E0901D1a1550aD2e64D568E69909;
-    // 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B; for Sepolia
+    // address public vrfCoordinator = 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B;
+    // 0x271682DEB8C4E0901D1a1550aD2e64D568E69909; for Sepolia
 
     // Custom ownership implementation
     address private _lotteryOwner;
@@ -42,10 +42,10 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         address initiator;
     }
 
-    // Mapping from vote ID to Vote
+    // Mapping from lottery ID to Lottery
     mapping(uint256 => Lottery) public lotteries;
 
-    // Mapping from random lottery ID to request ID
+    // Mapping from request ID to random lottery ID
     mapping(uint256 => uint256) public randomLotteryIds;
 
     // Mapping from lottery ID to voter address to stake index
@@ -70,14 +70,14 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
     event LotteryStakingFinalized(uint256 indexed lotteryId, uint256 amount);
     event WinnerSelected(uint256 indexed lotteryId, address winner, uint256 yield);
     event DiceRolled(uint256 indexed requestId, address indexed roller);
-    event DiceLanded(uint256 indexed requestId, uint256 indexed result);
+    event DiceLanded(uint256 indexed requestId, uint256 indexed result, uint256 indexed lotteryId);
     event DelayedFunctionExecuted(address indexed caller, uint256 timestamp, uint256 lotteryId);
     event LotteryOwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
-    constructor(address _USDC, address _pool) VRFConsumerBaseV2Plus(vrfCoordinator) {
+    constructor(address _USDC, address _pool, address _vrfCoordinator) VRFConsumerBaseV2Plus(_vrfCoordinator) {
         USDC = IERC20(_USDC);
         aavePool = IPool(_pool);
-        s_vrfCoordinator = IVRFCoordinatorV2Plus(vrfCoordinator);
+        s_vrfCoordinator = IVRFCoordinatorV2Plus(_vrfCoordinator);
         _lotteryOwner = msg.sender;
     }
 
@@ -341,7 +341,11 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         uint256 lotteryId = randomLotteryIds[requestId];
         lotteries[lotteryId].randomNumber = randomValue;
 
-        emit DiceLanded(requestId, randomValue);
+        emit DiceLanded(requestId, randomValue, lotteryId);
+    }
+
+    function fulfillRandomWords_mock(uint256 requestId, uint256[] calldata randomWords) external {
+        fulfillRandomWords(requestId, randomWords);
     }
 
     function checkUpkeep(bytes calldata /* checkData */ )
@@ -386,5 +390,9 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
                 break;
             }
         }
+    }
+
+    function updateSubscriptionId(uint64 newSubId) external onlyLotteryOwner {
+        s_subscriptionId = newSubId;
     }
 }

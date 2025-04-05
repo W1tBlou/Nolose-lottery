@@ -10,7 +10,7 @@ contract LotterySystemDeployScript is Script {
         address usdc = vm.envAddress("USDC_ADDRESS");
         address aavePool = vm.envAddress("AAVE_POOL_ADDRESS");
         address owner = vm.envAddress("OWNER_ADDRESS");
-
+        address vrfCoordinator = vm.envAddress("VRF_COORDINATOR_ADDRESS");
         console2.log("Starting deployment with parameters:");
         console2.log("USDC:", usdc);
         console2.log("Aave Pool:", aavePool);
@@ -20,7 +20,7 @@ contract LotterySystemDeployScript is Script {
         vm.startBroadcast(owner);
 
         // Deploy LotterySystem
-        LotterySystem lotterySystem = new LotterySystem(usdc, aavePool);
+        LotterySystem lotterySystem = new LotterySystem(usdc, aavePool, vrfCoordinator);
 
         // Verify deployment
         require(address(lotterySystem) != address(0), "Deployment failed");
