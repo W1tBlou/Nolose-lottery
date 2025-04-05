@@ -11,18 +11,24 @@ contract LotterySystemDeployScript is Script {
         address aavePool = vm.envAddress("AAVE_POOL_ADDRESS");
         address owner = vm.envAddress("OWNER_ADDRESS");
 
+        console2.log("Starting deployment with parameters:");
+        console2.log("USDC:", usdc);
+        console2.log("Aave Pool:", aavePool);
+        console2.log("Owner:", owner);
+
         // Start broadcasting transactions
         vm.startBroadcast(owner);
 
         // Deploy LotterySystem
-        LotterySystem lotterySystem = new LotterySystem(
-            usdc,
-            aavePool
-        );
-        console2.log("LotterySystem deployed at:", address(lotterySystem));
+        LotterySystem lotterySystem = new LotterySystem(usdc, aavePool);
 
-        // Set up permissions and configurations
-        console2.log("LotteryResultNFT configured with LotterySystem address");
+        // Verify deployment
+        require(address(lotterySystem) != address(0), "Deployment failed");
+        require(lotterySystem.owner() == owner, "Owner not set correctly");
+        require(address(lotterySystem.USDC()) == usdc, "USDC not set correctly");
+        require(address(lotterySystem.aavePool()) == aavePool, "Aave Pool not set correctly");
+
+        console2.log("LotterySystem deployed at:", address(lotterySystem));
 
         vm.stopBroadcast();
 
@@ -34,5 +40,6 @@ contract LotterySystemDeployScript is Script {
         console2.log("USDC:", usdc);
         console2.log("Aave Pool:", aavePool);
         console2.log("LotterySystem:", address(lotterySystem));
+        console2.log("Deployment successful!");
     }
-} 
+}
