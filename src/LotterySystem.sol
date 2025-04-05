@@ -144,17 +144,14 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         //сюда можно добавить проверку закончился ли стакинг или нет
         Lottery storage lottery = lotteries[lotteryId];
 
-
         require(lottery.id != 0, "Lottery does not exist");
         require(!lottery.stakingFinalized, "Lottery staking period has ended");
         require(block.timestamp < lottery.stakingDeadline, "Staking deadline passed");
         require(amount > 0, "Amount must be greater than 0");
         require(USDC.balanceOf(msg.sender) >= amount, "Insufficient USDC balance");
 
-
         // Transfer USDC from user to contract
         require(USDC.transferFrom(msg.sender, address(this), amount), "USDC transfer failed");
-
 
         // Record the stake
         if (stakes[lotteryId][msg.sender] == 0) {
@@ -162,7 +159,6 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         }
         stakes[lotteryId][msg.sender] += amount;
         totalStakes[lotteryId] += amount;
-
 
         emit StakeCast(lotteryId, msg.sender, amount);
     }
@@ -175,9 +171,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         require(!lottery.stakingFinalized, "Lottery staking already finalized");
         require(block.timestamp >= lottery.stakingDeadline, "Lottery staking deadline not passed");
 
-
         lottery.stakingFinalized = true;
-
 
         // Approve USDC spending for Aave pool
         require(USDC.approve(address(aavePool), amount), "USDC approval failed");
@@ -209,7 +203,6 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
 
         uint256 originalStake = totalStakes[lotteryId];
 
-
         // First, select the winner before any external calls
         address[] memory stakersList = stakers[lotteryId];
         require(stakersList.length > 0, "No stakers in lottery");
@@ -220,7 +213,6 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         // Scale down to range [0, totalStakes[lotteryId]]
         uint256 scaledRandom = randomValue % totalStakes[lotteryId];
 
-
         uint256 cumulativeStake = 0;
         address winner;
 
@@ -230,14 +222,12 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
             uint256 stakeAmount = stakes[lotteryId][staker];
             require(stakeAmount > 0, "Invalid stake amount");
 
-
             cumulativeStake += stakeAmount;
             if (cumulativeStake > scaledRandom && winner == address(0)) {
                 winner = staker;
                 break;
             }
         }
-
 
         require(winner != address(0), "No winner selected");
         lottery.winner = winner;
