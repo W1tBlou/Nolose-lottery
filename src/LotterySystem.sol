@@ -22,7 +22,8 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
     IPool public aavePool;
 
     // Fixed VRF coordinator address
-    address public constant vrfCoordinator = 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B;
+    address public constant vrfCoordinator = 0x271682DEB8C4E0901D1a1550aD2e64D568E69909;
+    // 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B; for Sepolia
 
     // Custom ownership implementation
     address private _lotteryOwner;
