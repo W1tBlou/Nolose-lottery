@@ -3,7 +3,7 @@
 This is a full report of tests for No-Lose Lottery. We conducted three different experiments to check the correctness of the proposed solution.
 You can also repeat all of them to check the correctness. 
 
-*Prerequisits*: working .env file. More details in [README.md](./README.md)
+*Prerequisites*: working .env file. More details in [README.md](./README.md)
 
 ## TESTS on anvil with sepolia fork
 
@@ -11,8 +11,7 @@ Goal: to test mock aave pool, before testing all on sepolia with chainlink
 
 ```bash
 source .env
-anvil --fork-url $SEPOLIA_RPC_URL
-forge test --match-path test/LotterySystemMockAave.t.sol -vvv --fork-url $ANVIL_RPC_URL
+forge test --match-path test/LotterySystemMockAave.t.sol -vvv --fork-url $SEPOLIA_RPC_URL
 ```
 
 Result: successful run in Github Actions.
@@ -23,8 +22,7 @@ Goal: to test aave implementation with real world fork, mock chainlink
 
 ```bash
 source .env
-anvil --fork-url $ETH_RPC_URL
-forge test --match-path test/LotterySystem.t.sol -vvv --fork-url $ANVIL_RPC_URL
+forge test --match-path test/LotterySystem.t.sol -vvv --fork-url $ETH_RPC_URL
 ```
 
 Result: successful run in Github Actions.
@@ -35,7 +33,9 @@ Result: successful run in Github Actions.
 Goal: test chainlink interaction to run all code successfully, mock aave.
 
 Implementation:
+
 LotterySystem.sol: [0x7f28f6f28ec19f9e20dd42936e81e77fbf05837a](https://sepolia.etherscan.io/address/0x7f28f6f28ec19f9e20dd42936e81e77fbf05837a)
+
 MockAavePool.sol: [0x70cd80ebea05e9c719be0f8d1472c4956588a3e8](https://sepolia.etherscan.io/address/0x70cd80ebea05e9c719be0f8d1472c4956588a3e8)
 
 Step guide:

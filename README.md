@@ -14,7 +14,7 @@ A decentralized lottery system built on Ethereum that allows users to participat
 
 
 # Scheme
-![NoLose Lottery System Scheme](./scheme.jpg)
+![NoLose Lottery System Scheme](./scheme.png)
 
 
 ## Quick start
