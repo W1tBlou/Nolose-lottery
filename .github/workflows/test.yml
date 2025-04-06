@@ -56,12 +56,13 @@ jobs:
           echo "$USDC_ADDRESS"
           echo "$AAVE_POOL_ADDRESS"
 
+      - name: Run Forge tests for mainnet fork
+        run: |
+          forge test --match-path test/LotterySystem.t.sol -vvv --fork-url "$ETH_RPC_URL"
+        id: testMainnet
+
       - name: Run Forge tests for sepolia fork
         run: |
           forge test --match-path test/LotterySystemMockAave.t.sol -vvv --fork-url "$SEPOLIA_RPC_URL"
         id: testSepolia
 
-      - name: Run Forge tests for mainnet fork
-        run: |
-          forge test --match-path test/LotterySystem.t.sol -vvv --fork-url "$ETH_RPC_URL"
-        id: testMainnet
