@@ -4,7 +4,7 @@ A decentralized lottery system built on Ethereum that allows users to participat
 
 ## Features
 
-- **Full Coverage Tests**: See ![experiment.md](./experiment.md) for more details
+- **Full Coverage Tests**: See [experiment.md](./experiment.md) for more details
 - **ERC20 Staking**: Users can stake USDC tokens (or other ERC20 tokens) to participate in lotteries
 - **Aave Integration**: Staked tokens are automatically supplied to [Aave Protocol](https://app.aave.com/) to generate yield
 - **Weighted Random Selection**: Winner selection is based on the amount of tokens staked

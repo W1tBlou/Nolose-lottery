@@ -59,7 +59,7 @@ jobs:
 
       - name: Run Forge tests for mainnet fork
         run: |
-          forge test --match-path test/LotterySystem.t.sol -vvv --fork-url https://eth-mainnet.g.alchemy.com/v2/u8KNGev4YJSxig_yx_xMM2Gnn4CutPat
+          forge test --match-path test/LotterySystem.t.sol -vvv --fork-url "$ETH_RPC_URL"
         id: testMainnet
 
       - name: Run Forge tests for sepolia fork
