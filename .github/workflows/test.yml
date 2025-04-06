@@ -56,44 +56,12 @@ jobs:
           echo "$USDC_ADDRESS"
           echo "$AAVE_POOL_ADDRESS"
 
-      - name: Create and run anvil instance for sepolia fork
-        run: |
-          anvil --fork-url "$SEPOLIA_RPC_URL" &
-          echo $! > /tmp/anvil.pid  # Save the PID
-          while ! nc -z localhost 8545; do
-            sleep 1
-          done
-        id: anvilSepolia
-
       - name: Run Forge tests for sepolia fork
         run: |
-          forge test --match-path test/LotterySystemMockAave.t.sol -vvv --fork-url "$ANVIL_RPC_URL"
+          forge test --match-path test/LotterySystemMockAave.t.sol -vvv --fork-url "$SEPOLIA_RPC_URL"
         id: testSepolia
 
-      - name: Cleanup anvil for sepolia fork
-        if: always()  # Run this step even if tests fail
-        run: |
-          if [ -f /tmp/anvil.pid ]; then
-            kill $(cat /tmp/anvil.pid)
-          fi
-
-      - name: Create and run anvil instance for mainnet fork
-        run: |
-          anvil --fork-url "$ETH_RPC_URL" &
-          echo $! > /tmp/anvilMainnet.pid  # Save the PID
-          while ! nc -z localhost 8545; do
-            sleep 1
-          done
-        id: anvilMainnet
-  
       - name: Run Forge tests for mainnet fork
         run: |
-          forge test --match-path test/LotterySystem.t.sol -vvv --fork-url "$ANVIL_RPC_URL"
+          forge test --match-path test/LotterySystem.t.sol -vvv --fork-url "$ETH_RPC_URL"
         id: testMainnet
-  
-      - name: Cleanup anvil for mainnet fork
-        if: always()  # Run this step even if tests fail
-        run: |
-          if [ -f /tmp/anvilMainnet.pid ]; then
-            kill $(cat /tmp/anvilMainnet.pid)
-          fi
