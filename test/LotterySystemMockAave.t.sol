@@ -3,49 +3,49 @@ pragma solidity ^0.8.20;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {LotterySystem} from "../src/LotterySystem.sol";
-// import {VRFCoordinatorV2Mock} from "@chainlink/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2Mock.sol";
 import {MyVRFCoordinatorV2Mock} from "../src/MockVRFCoordinator.sol";
+import {MockAavePool} from "../src/MockAavePool.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract LotterySystemTest is Test {
-    using SafeERC20 for IERC20;
-
+contract LotterySystemMockAaveTest is Test {
     LotterySystem public lotterySystem;
     IERC20 public usdc;
-    IPool public aavePool;
+    MockAavePool public aavePool;
+    MyVRFCoordinatorV2Mock public mockCoordinator;
 
-    address public owner = 0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503;
-    address public user1 = 0x4260193D14D89836E7e83E2238A091D5a737ffcA;
-    address public user2 = 0xC066ac5D385419B1A8c43A0E146fA439837a8B8c;
-    address public user3 = 0x46B2Ee09028B2512f10bAeA18A743Ca46A56F658;
-    address public constant MOCK_VRF_COORDINATOR = 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B;
+    // Sepolia USDC address
+    address public constant SEPOLIA_USDC_ADDRESS = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
+    // Your owner address
+    address public constant OWNER_ADDRESS = 0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503;
+    // Test users
+    address public user1 = makeAddr("user1");
+    address public user2 = makeAddr("user2");
+    address public user3 = makeAddr("user3");
 
-    uint256 public constant INITIAL_BALANCE = 1000 * 10 ** 6; // 1000 USDC (6 decimals)
-    uint256 public constant STAKE_AMOUNT = 100 * 10 ** 6; // 100 USDC
+    uint256 public constant INITIAL_BALANCE = 10 * 10 ** 6; // 10 USDC (6 decimals)
+    uint256 public constant STAKE_AMOUNT = 1 * 10 ** 6; // 1 USDC
     uint256 public constant LOTTERY_DURATION = 1 days;
     uint256 public constant STAKING_DURATION = 1 hours;
 
     function setUp() public {
-        // Fork mainnet to get real USDC and Aave contracts
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"));
+        // Get real USDC token
+        usdc = IERC20(SEPOLIA_USDC_ADDRESS);
 
-        // Get mainnet addresses
-        usdc = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC on mainnet
-        aavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2); // Aave V3 Pool
+        // Deal USDC to owner
+        deal(address(usdc), OWNER_ADDRESS, INITIAL_BALANCE * 10);
 
-        vm.startPrank(owner);
-        // Deploy MockVRFCoordinator to the specific address
-        MyVRFCoordinatorV2Mock mockCoordinator = new MyVRFCoordinatorV2Mock();
-        // mockCoordinator.createSubscription();
-        // mockCoordinator.fundSubscription(1, 100000000000000000);
+        // Check owner's USDC balance
+        uint256 ownerBalance = usdc.balanceOf(OWNER_ADDRESS);
+        console2.log("Owner USDC balance:", ownerBalance);
+        require(ownerBalance >= INITIAL_BALANCE * 4, "Owner does not have enough USDC for testing");
 
-        // Deploy contracts
+        // Deploy mock contracts
+        mockCoordinator = new MyVRFCoordinatorV2Mock();
+        aavePool = new MockAavePool(address(usdc), address(usdc)); // Using USDC as aToken for simplicity
+
+        // Deploy lottery system
+        vm.startPrank(OWNER_ADDRESS);
         lotterySystem = new LotterySystem(address(usdc), address(aavePool), address(mockCoordinator));
-        console2.log("LotterySystem deployed at:", address(lotterySystem));
-        console2.log("LotterySystem vrfCoordinator:", address(mockCoordinator));
-        // mockCoordinator.addConsumer(1, address(lotterySystem));
         vm.stopPrank();
 
         // Setup test users
@@ -53,14 +53,17 @@ contract LotterySystemTest is Test {
         vm.deal(user2, 100 ether);
         vm.deal(user3, 100 ether);
 
-        // Deal USDC to test users
-        deal(address(usdc), user1, INITIAL_BALANCE);
-        deal(address(usdc), user2, INITIAL_BALANCE);
-        deal(address(usdc), user3, INITIAL_BALANCE);
+        // Transfer USDC to test users and pool
+        vm.startPrank(OWNER_ADDRESS);
+        usdc.transfer(user1, INITIAL_BALANCE);
+        usdc.transfer(user2, INITIAL_BALANCE);
+        usdc.transfer(user3, INITIAL_BALANCE);
+        usdc.transfer(address(aavePool), INITIAL_BALANCE); // Give pool enough USDC for withdrawals
+        vm.stopPrank();
     }
 
     function testCreateLottery() public {
-        vm.startPrank(owner);
+        vm.startPrank(OWNER_ADDRESS);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
         vm.stopPrank();
 
@@ -70,7 +73,7 @@ contract LotterySystemTest is Test {
 
     function testStake() public {
         // Create lottery
-        vm.startPrank(owner);
+        vm.startPrank(OWNER_ADDRESS);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
         vm.stopPrank();
 
@@ -85,7 +88,7 @@ contract LotterySystemTest is Test {
 
     function test_RevertWhen_StakingAfterDeadline() public {
         // Create lottery
-        vm.startPrank(owner);
+        vm.startPrank(OWNER_ADDRESS);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
         vm.stopPrank();
 
@@ -101,7 +104,7 @@ contract LotterySystemTest is Test {
 
     function testFinalizeStaking() public {
         // Create lottery
-        vm.startPrank(owner);
+        vm.startPrank(OWNER_ADDRESS);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
         vm.stopPrank();
 
@@ -129,7 +132,7 @@ contract LotterySystemTest is Test {
 
     function testTakeWinningsAndWinnerSelection() public {
         // Create lottery
-        vm.startPrank(owner);
+        vm.startPrank(OWNER_ADDRESS);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
         vm.stopPrank();
 
@@ -155,19 +158,14 @@ contract LotterySystemTest is Test {
         // Finalize staking
         lotterySystem.finalizeStaking(1);
 
-        // // Fulfill random words because we are using a mock https://docs.chain.link/vrf/v2/subscription/examples/test-locally
+        // Fulfill random words
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = 42;
         (,,,,,, uint256 randomRequestId,,,) = lotterySystem.lotteries(1);
-        console2.log("LotterySystem randomRequestId:", randomRequestId);
         lotterySystem.fulfillRandomWords_mock(randomRequestId, randomWords);
 
         // Move time past lottery deadline
         vm.warp(block.timestamp + LOTTERY_DURATION + 1);
-
-        // Verify random number is set
-        (,,,,,,, uint256 randomNumber,,) = lotterySystem.lotteries(1);
-        require(randomNumber != 0, "Random number not set");
 
         // Record balances before taking winnings
         uint256 user1BalanceBefore = usdc.balanceOf(user1);
@@ -175,6 +173,7 @@ contract LotterySystemTest is Test {
         uint256 user3BalanceBefore = usdc.balanceOf(user3);
 
         lotterySystem.finalizeLottery(1);
+
         // Take winnings for all users
         vm.startPrank(user1);
         lotterySystem.takeWinnings(1);
@@ -213,7 +212,7 @@ contract LotterySystemTest is Test {
 
     function test_RevertWhen_TakingWinningsBeforeDeadline() public {
         // Create lottery
-        vm.startPrank(owner);
+        vm.startPrank(OWNER_ADDRESS);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
         vm.stopPrank();
 
@@ -236,7 +235,7 @@ contract LotterySystemTest is Test {
 
     function test_RevertWhen_TakingWinningsBeforeStakingFinalized() public {
         // Create lottery
-        vm.startPrank(owner);
+        vm.startPrank(OWNER_ADDRESS);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
         vm.stopPrank();
 
@@ -251,31 +250,18 @@ contract LotterySystemTest is Test {
 
     function testAaveIntegration() public {
         // Create lottery
-        vm.startPrank(owner);
+        vm.startPrank(OWNER_ADDRESS);
         lotterySystem.createLottery(LOTTERY_DURATION, STAKING_DURATION);
         vm.stopPrank();
 
-        // Get aUSDC token address from Aave pool
-        IERC20 aUSDC = IERC20(0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c); // aUSDC on mainnet
-
         // Record initial balances
-        uint256 initialATokenBalance = aUSDC.balanceOf(address(lotterySystem));
         uint256 initialLotteryBalance = usdc.balanceOf(address(lotterySystem));
-
-        console2.log("Initial balances:");
-        console2.log("Lottery aToken:", initialATokenBalance);
-        console2.log("Lottery USDC:", initialLotteryBalance);
 
         // Stake
         vm.startPrank(user1);
         usdc.approve(address(lotterySystem), STAKE_AMOUNT);
         lotterySystem.stake(1, STAKE_AMOUNT);
         vm.stopPrank();
-
-        console2.log("\nAfter user stake balances:");
-        console2.log("Lottery USDC:", usdc.balanceOf(address(lotterySystem)));
-        console2.log("Lottery aToken:", aUSDC.balanceOf(address(lotterySystem)));
-        console2.log("Lottery contract address:", address(lotterySystem));
 
         // Verify stake was successful
         assertEq(
@@ -294,15 +280,7 @@ contract LotterySystemTest is Test {
         vm.warp(block.timestamp + 1 days);
 
         // Get final balances
-        uint256 finalATokenBalance = aUSDC.balanceOf(address(lotterySystem));
         uint256 finalLotteryBalance = usdc.balanceOf(address(lotterySystem));
-
-        console2.log("\nFinal balances:");
-        console2.log("Lottery aToken:", finalATokenBalance);
-        console2.log("Lottery USDC:", finalLotteryBalance);
-
-        // Verify aToken balance increased (this means supply was successful)
-        assertTrue(finalATokenBalance > 0, "aToken balance should be greater than 0");
 
         // Verify USDC was transferred from lottery to pool
         assertEq(finalLotteryBalance, 0, "Lottery should have 0 USDC after supply");

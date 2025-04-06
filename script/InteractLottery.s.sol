@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Script, console2} from "forge-std/Script.sol";
 import {LotterySystem} from "../src/LotterySystem.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {MockAavePool} from "../src/MockAavePool.sol";
 
 contract InteractLottery is Script {
     function setUp() public {}
@@ -13,7 +14,7 @@ contract InteractLottery is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // Get the deployed contract address
-        address lotteryAddress = 0x4D65Bf06b4F49Ce8a14aBF09c7D2ECe9fd6E220D;
+        address lotteryAddress = 0x7f28f6F28eC19F9E20Dd42936E81e77fBF05837A;
         LotterySystem lottery = LotterySystem(lotteryAddress);
 
         // Get USDC address from env

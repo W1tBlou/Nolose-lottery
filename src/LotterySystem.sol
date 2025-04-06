@@ -22,8 +22,8 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
     IPool public aavePool;
 
     // Fixed VRF coordinator address
-    address public constant vrfCoordinator = 0x271682DEB8C4E0901D1a1550aD2e64D568E69909;
-    // 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B; for Sepolia
+    // address public vrfCoordinator = 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B;
+    // 0x271682DEB8C4E0901D1a1550aD2e64D568E69909; for Sepolia
 
     // Custom ownership implementation
     address private _lotteryOwner;
@@ -42,10 +42,10 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         address initiator;
     }
 
-    // Mapping from vote ID to Vote
+    // Mapping from lottery ID to Lottery
     mapping(uint256 => Lottery) public lotteries;
 
-    // Mapping from random lottery ID to request ID
+    // Mapping from request ID to random lottery ID
     mapping(uint256 => uint256) public randomLotteryIds;
 
     // Mapping from lottery ID to voter address to stake index
@@ -70,14 +70,14 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
     event LotteryStakingFinalized(uint256 indexed lotteryId, uint256 amount);
     event WinnerSelected(uint256 indexed lotteryId, address winner, uint256 yield);
     event DiceRolled(uint256 indexed requestId, address indexed roller);
-    event DiceLanded(uint256 indexed requestId, uint256 indexed result);
+    event DiceLanded(uint256 indexed requestId, uint256 indexed result, uint256 indexed lotteryId);
     event DelayedFunctionExecuted(address indexed caller, uint256 timestamp, uint256 lotteryId);
     event LotteryOwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
-    constructor(address _USDC, address _pool) VRFConsumerBaseV2Plus(vrfCoordinator) {
+    constructor(address _USDC, address _pool, address _vrfCoordinator) VRFConsumerBaseV2Plus(_vrfCoordinator) {
         USDC = IERC20(_USDC);
         aavePool = IPool(_pool);
-        s_vrfCoordinator = IVRFCoordinatorV2Plus(vrfCoordinator);
+        s_vrfCoordinator = IVRFCoordinatorV2Plus(_vrfCoordinator);
         _lotteryOwner = msg.sender;
     }
 
@@ -85,7 +85,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
      * @dev Throws if called by any account other than the lottery owner.
      */
     modifier onlyLotteryOwner() {
-        // require(msg.sender == _lotteryOwner, "Caller is not the lottery owner");
+        require(msg.sender == _lotteryOwner, "Caller is not the lottery owner");
         _;
     }
 
@@ -249,15 +249,12 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         require(USDC.transfer(staker, userStake), "USDC transfer failed");
     }
 
-    function takeWinnings(uint256 lotteryId) public {
+    function finalizeLottery(uint256 lotteryId) public {
         Lottery storage lottery = lotteries[lotteryId];
 
         require(lottery.id != 0, "Lottery does not exist");
         require(lottery.stakingFinalized, "Staking not finalized");
         require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
-
-        uint256 userStake = stakes[lotteryId][msg.sender];
-        require(userStake > 0, "User has no stake in this lottery or already took winnings");
 
         if (lottery.winner == address(0)) {
             lottery.winner = _choseWinner(lotteryId);
@@ -271,6 +268,17 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
             lottery.finalized = true;
             emit LotteryFinalized(lotteryId, lottery.winner, lottery.yield);
         }
+    }
+
+    function takeWinnings(uint256 lotteryId) public {
+        Lottery storage lottery = lotteries[lotteryId];
+
+        require(lottery.id != 0, "Lottery does not exist");
+        require(lottery.stakingFinalized, "Staking not finalized");
+        require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
+
+        uint256 userStake = stakes[lotteryId][msg.sender];
+        require(userStake > 0, "User has no stake in this lottery or already took winnings");
 
         // Send winnings to user
         if (msg.sender == lottery.winner) {
@@ -302,8 +310,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
      *
      * @param roller address of the roller
      */
-    function rollDice(address roller) public onlyLotteryOwner returns (uint256 requestId) {
-        // require(s_results[roller] == 0, "Already rolled");
+    function rollDice(address roller) internal returns (uint256 requestId) {
         // Will revert if subscription is not set and funded.
         requestId = s_vrfCoordinator.requestRandomWords(
             VRFV2PlusClient.RandomWordsRequest({
@@ -341,7 +348,11 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         uint256 lotteryId = randomLotteryIds[requestId];
         lotteries[lotteryId].randomNumber = randomValue;
 
-        emit DiceLanded(requestId, randomValue);
+        emit DiceLanded(requestId, randomValue, lotteryId);
+    }
+
+    function fulfillRandomWords_mock(uint256 requestId, uint256[] calldata randomWords) external {
+        fulfillRandomWords(requestId, randomWords);
     }
 
     function checkUpkeep(bytes calldata /* checkData */ )
@@ -350,6 +361,8 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         override
         returns (bool upkeepNeeded, bytes memory /* performData */ )
     {
+        upkeepNeeded = false;
+
         for (uint256 i = 1; i < _lotteryIdCounter; i++) {
             if (
                 lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].deadline
@@ -359,11 +372,10 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
                 break;
             } else if (
                 lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].stakingDeadline
+                    && !lotteries[i].stakingFinalized
             ) {
                 upkeepNeeded = true;
                 break;
-            } else {
-                upkeepNeeded = false;
             }
         }
     }
@@ -376,13 +388,14 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
                     && lotteries[i].randomNumber != 0
             ) {
                 emit DelayedFunctionExecuted(msg.sender, block.timestamp, i);
-                takeWinnings(i);
+                finalizeLottery(i);
                 break;
             } else if (
                 lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].stakingDeadline
+                    && !lotteries[i].stakingFinalized
             ) {
                 emit DelayedFunctionExecuted(msg.sender, block.timestamp, i);
-                takeWinnings(i);
+                finalizeStaking(i);
                 break;
             }
         }
