@@ -1,51 +1,72 @@
 # No-Lose Lottery Experiment
 
-This is an experimental implementation of a no-lose lottery using Chainlink VRF for randomness generation. The contract is deployed on Sepolia testnet.
+This is a full report of tests for No-Lose Lottery. We conducted three different experiments to check the correctness of the proposed solution.
+You can also repeat all of them to check the correctness. 
 
-## Deployed Contract
-Contract Address: [0x4D65Bf06b4F49Ce8a14aBF09c7D2ECe9fd6E220D](https://sepolia.etherscan.io/address/0x4D65Bf06b4F49Ce8a14aBF09c7D2ECe9fd6E220D)
+*Prerequisits*: working .env file. More details in [README.md](./README.md)
 
-## Setup
+## TESTS on anvil with sepolia fork
 
-1. Create a `.env` file with the following variables:
-```
-SEPOLIA_RPC_URL=<your-sepolia-rpc-url>
-SEPOLIA_USDC_ADDRESS=0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8
-SEPOLIA_AAVE_POOL_ADDRESS=0xE7EC1B0015eb2ADEedb1B7f9F1Ce82F9DAD6dF08
-PRIVATE_KEY=<your-private-key>
-```
+Goal: to test mock aave pool, before testing all on sepolia with chainlink
 
-## Deployment
-
-To deploy the contract:
 ```bash
-./deploy.sh sepolia
+source .env
+anvil --fork-url $SEPOLIA_RPC_URL
+forge test --match-path test/LotterySystemMockAave.t.sol -vvv --fork-url $ANVIL_RPC_URL
 ```
 
-## Interaction
+Result: successful run in Github Actions.
 
-0. Add your smart contract to consumers in [vrf.chain.link](vrf.chain.link) and to new logic upkeep on [automation.chain.link/sepolia](automation.chain.link/sepolia)
+## TESTS on anvil with mainnet fork
 
-1. Create a new lottery and stake 100 USDC:
+Goal: to test aave implementation with real world fork, mock chainlink
+
 ```bash
-PRIVATE_KEY=.... SEPOLIA_USDC_ADDRESS=0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8 forge script script/InteractLottery.s.sol:InteractLottery --rpc-url https://sepolia.infura.io/v3/8b4535c511eb4b8fb625279437c92ed2 --broadcast -vv
+source .env
+anvil --fork-url $ETH_RPC_URL
+forge test --match-path test/LotterySystem.t.sol -vvv --fork-url $ANVIL_RPC_URL
 ```
 
-2. Stake USDC in the lottery:
-- Approve USDC spending for the lottery contract
-- Call `stake()` with the lottery ID and amount
+Result: successful run in Github Actions.
 
-3. Finalize staking:
-- Wait for the staking period to end, it will be done by chainlink 
 
-4. Finalize lottery:
-- Wait for the lottery period to end, it will be done by chainlink
+## TESTS on Sepolia Network
 
-## TODO
-- [ ] Implement Aave integration for yield generation
-- [ ] Add tests for Aave integration
-- [ ] Add more documentation about yield calculation
-- [ ] Add frontend interface
+Goal: test chainlink interaction to run all code successfully, mock aave.
 
-## Note
-Currently, the Aave integration is disabled. The contract works as a basic lottery system with random winner selection via Chainlink VRF, but without yield generation. Future updates will include proper Aave integration for yield generation. 
+Implementation:
+LotterySystem.sol: [0x7f28f6f28ec19f9e20dd42936e81e77fbf05837a](https://sepolia.etherscan.io/address/0x7f28f6f28ec19f9e20dd42936e81e77fbf05837a)
+MockAavePool.sol: [0x70cd80ebea05e9c719be0f8d1472c4956588a3e8](https://sepolia.etherscan.io/address/0x70cd80ebea05e9c719be0f8d1472c4956588a3e8)
+
+Step guide:
+
+1. Create a subsription with small deposit on the [Chainlink VRF](https://docs.chain.link/vrf), copy a subscriptionId to the implementation of the [LotterySystem.sol](./src/LotterySystem.sol)
+
+2. Deploy smartcontract ([LotterySystem.sol](./src/LotterySystem.sol) and [MockAavePool.sol](./src/MockAavePool.sol)) to Sepolia ETH network
+
+```bash
+source .env
+forge script script/LotterySystem.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
+```
+
+3. Get both addresses for LotterySystem and MockAavePool
+- Add address of LotterySystem to the consumer for [VRF](https://vrf.chain.link/)
+- Create a Custom-logic Upkeep with the address of the LotterySystem in the [Automation Chainlink](https://automation.chain.link/) with small deposit
+- Send to MockAavePool some USDCs, because it is mock, not real implementation
+- Update LotterySystem address in the [InteractLottery.s.sol](./script/InteractLottery.s.sol)
+
+4. Start Lottery 1 with your duration and stake some USDC tokens.
+
+```bash
+source .env
+forge script script/InteractLottery.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
+```
+
+5. Wait until end of the lottery and withdrawl your tokens.
+
+```bash
+source .env
+cast call YOUR_LOTTERY_ADDRESS "lotteries(uint256)" 1 --rpc-url $SEPOLIA_RPC_URL
+```
+
+

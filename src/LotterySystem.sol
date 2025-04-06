@@ -85,7 +85,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
      * @dev Throws if called by any account other than the lottery owner.
      */
     modifier onlyLotteryOwner() {
-        // require(msg.sender == _lotteryOwner, "Caller is not the lottery owner");
+        require(msg.sender == _lotteryOwner, "Caller is not the lottery owner");
         _;
     }
 
@@ -249,15 +249,12 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         require(USDC.transfer(staker, userStake), "USDC transfer failed");
     }
 
-    function takeWinnings(uint256 lotteryId) public {
+    function finalizeLottery(uint256 lotteryId) public {
         Lottery storage lottery = lotteries[lotteryId];
 
         require(lottery.id != 0, "Lottery does not exist");
         require(lottery.stakingFinalized, "Staking not finalized");
         require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
-
-        uint256 userStake = stakes[lotteryId][msg.sender];
-        require(userStake > 0, "User has no stake in this lottery or already took winnings");
 
         if (lottery.winner == address(0)) {
             lottery.winner = _choseWinner(lotteryId);
@@ -271,6 +268,17 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
             lottery.finalized = true;
             emit LotteryFinalized(lotteryId, lottery.winner, lottery.yield);
         }
+    }
+
+    function takeWinnings(uint256 lotteryId) public {
+        Lottery storage lottery = lotteries[lotteryId];
+
+        require(lottery.id != 0, "Lottery does not exist");
+        require(lottery.stakingFinalized, "Staking not finalized");
+        require(block.timestamp >= lottery.deadline, "Lottery deadline not passed");
+
+        uint256 userStake = stakes[lotteryId][msg.sender];
+        require(userStake > 0, "User has no stake in this lottery or already took winnings");
 
         // Send winnings to user
         if (msg.sender == lottery.winner) {
@@ -302,8 +310,7 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
      *
      * @param roller address of the roller
      */
-    function rollDice(address roller) public onlyLotteryOwner returns (uint256 requestId) {
-        // require(s_results[roller] == 0, "Already rolled");
+    function rollDice(address roller) internal returns (uint256 requestId) {
         // Will revert if subscription is not set and funded.
         requestId = s_vrfCoordinator.requestRandomWords(
             VRFV2PlusClient.RandomWordsRequest({
@@ -354,6 +361,8 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
         override
         returns (bool upkeepNeeded, bytes memory /* performData */ )
     {
+        upkeepNeeded = false;
+
         for (uint256 i = 1; i < _lotteryIdCounter; i++) {
             if (
                 lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].deadline
@@ -363,11 +372,10 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
                 break;
             } else if (
                 lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].stakingDeadline
+                    && !lotteries[i].stakingFinalized
             ) {
                 upkeepNeeded = true;
                 break;
-            } else {
-                upkeepNeeded = false;
             }
         }
     }
@@ -380,19 +388,16 @@ contract LotterySystem is ReentrancyGuard, VRFConsumerBaseV2Plus, AutomationComp
                     && lotteries[i].randomNumber != 0
             ) {
                 emit DelayedFunctionExecuted(msg.sender, block.timestamp, i);
-                takeWinnings(i);
+                finalizeLottery(i);
                 break;
             } else if (
                 lotteries[i].id != 0 && !lotteries[i].finalized && block.timestamp >= lotteries[i].stakingDeadline
+                    && !lotteries[i].stakingFinalized
             ) {
                 emit DelayedFunctionExecuted(msg.sender, block.timestamp, i);
-                takeWinnings(i);
+                finalizeStaking(i);
                 break;
             }
         }
-    }
-
-    function updateSubscriptionId(uint64 newSubId) external onlyLotteryOwner {
-        s_subscriptionId = newSubId;
     }
 }

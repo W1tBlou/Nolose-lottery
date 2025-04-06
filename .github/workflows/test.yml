@@ -8,6 +8,19 @@ on:
 env:
   FOUNDRY_PROFILE: ci
 
+  # RPC URLs
+  ANVIL_RPC_URL: http://127.0.0.1:8545
+  ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+  SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+
+  # Contract Addresses (Mainnet)
+  USDC_ADDRESS: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+  AAVE_POOL_ADDRESS: 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
+
+  # Contract Addresses (Sepolia)
+  SEPOLIA_USDC_ADDRESS: 0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8
+  SEPOLIA_VRF_COORDINATOR_ADDRESS: 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B
+
 jobs:
   check:
     strategy:
@@ -37,23 +50,50 @@ jobs:
           forge build --sizes
         id: build
 
-      - name: Create and run anvil instance
+      - name: Print env variables
         run: |
-          anvil --fork-url https://eth-mainnet.g.alchemy.com/v2/u8KNGev4YJSxig_yx_xMM2Gnn4CutPat &
+          echo "$ANVIL_RPC_URL"
+          echo "$USDC_ADDRESS"
+          echo "$AAVE_POOL_ADDRESS"
+
+      - name: Create and run anvil instance for sepolia fork
+        run: |
+          anvil --fork-url "$SEPOLIA_RPC_URL" &
           echo $! > /tmp/anvil.pid  # Save the PID
           while ! nc -z localhost 8545; do
             sleep 1
           done
-        id: anvil
+        id: anvilSepolia
 
-      - name: Run Forge tests
+      - name: Run Forge tests for sepolia fork
         run: |
-          source .env && forge test -vvv --fork-url $ANVIL_RPC_URL
-        id: test
+          forge test --match-path test/LotterySystemMockAave.t.sol -vvv --fork-url "$ANVIL_RPC_URL"
+        id: testSepolia
 
-      - name: Cleanup anvil
+      - name: Cleanup anvil for sepolia fork
         if: always()  # Run this step even if tests fail
         run: |
           if [ -f /tmp/anvil.pid ]; then
             kill $(cat /tmp/anvil.pid)
+          fi
+
+      - name: Create and run anvil instance for mainnet fork
+        run: |
+          anvil --fork-url "$ETH_RPC_URL" &
+          echo $! > /tmp/anvilMainnet.pid  # Save the PID
+          while ! nc -z localhost 8545; do
+            sleep 1
+          done
+        id: anvilMainnet
+  
+      - name: Run Forge tests for mainnet fork
+        run: |
+          forge test --match-path test/LotterySystem.t.sol -vvv --fork-url "$ANVIL_RPC_URL"
+        id: testMainnet
+  
+      - name: Cleanup anvil for mainnet fork
+        if: always()  # Run this step even if tests fail
+        run: |
+          if [ -f /tmp/anvilMainnet.pid ]; then
+            kill $(cat /tmp/anvilMainnet.pid)
           fi
